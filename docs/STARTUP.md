@@ -66,10 +66,19 @@ cp deploy/.env.example deploy/.env
 
 Update the copied files with values that match your environment. At a minimum you need to provide:
 
-- `DATABASE_URL` – PostgreSQL connection string used by the Go service.
-- `SESSION_SECRET` – random 32+ byte string for signing session cookies.
+- `DATABASE_URL` – PostgreSQL connection string used by the Go service (defaults to
+  `postgres://postgres:postgres@localhost:5432/vidfriends?sslmode=disable`).
+- `SESSION_SECRET` – random 32+ byte string for signing session cookies. Generate
+  a new value with `openssl rand -base64 32`.
 - `YT_DLP_PATH` – optional path to the `yt-dlp` binary if it is not on `$PATH`.
-- `VITE_API_BASE_URL` – API origin for the frontend (`http://localhost:8080` in local dev).
+- `VITE_API_BASE_URL` – API origin for the frontend (`http://localhost:8080` in
+  local development).
+- `VITE_USE_MOCKS` – toggle the frontend's mock service layer (`false` by
+  default).
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` – credentials the
+  Docker Compose workflow applies to the PostgreSQL container.
+- `BACKEND_PORT` / `FRONTEND_PORT` – override ports exposed by Docker Compose if
+  `8080` or `5173` conflict with other services on your machine.
 
 > **Tip:** Generate secure secrets with `openssl rand -base64 32`.
 
