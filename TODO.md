@@ -3,7 +3,7 @@
 A living checklist of follow-up work and enhancements to guide ongoing development.
 
 ## Infrastructure & Tooling
-- [ ] Review and document the Docker Compose services in `deploy/` to clarify how the backend, frontend, and database interact.
+- [x] Review and document the Docker Compose services in `deploy/` to clarify how the backend, frontend, and database interact.
 - [ ] Automate CI workflows to run Go tests, frontend unit tests, and linting on every pull request.
 - [ ] Set up container build automation that publishes multi-architecture images (x86_64 and arm64).
 
