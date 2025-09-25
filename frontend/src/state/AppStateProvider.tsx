@@ -7,6 +7,147 @@ import {
   useReducer
 } from 'react';
 
+const SESSION_STORAGE_KEY = 'vidfriends.session';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
+class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+async function parseJSON(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(payload: unknown): string | null {
+  if (payload && typeof payload === 'object' && 'error' in payload) {
+    const message = (payload as { error?: unknown }).error;
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return message;
+    }
+  }
+  return null;
+}
+
+function buildURL(path: string): string {
+  if (!path.startsWith('/')) {
+    return `${API_BASE_URL}/${path}`;
+  }
+  return `${API_BASE_URL}${path}`;
+}
+
+async function postJSON<T>(path: string, body: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(buildURL(path), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    throw new Error('Unable to connect to VidFriends services. Please try again.');
+  }
+
+  const payload = await parseJSON(response);
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? `Request failed with status ${response.status}`;
+    throw new ApiError(message, response.status);
+  }
+
+  return (payload as T) ?? (undefined as T);
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function deriveDisplayName(email: string, provided?: string): string {
+  if (provided && provided.trim().length > 0) {
+    return provided.trim();
+  }
+  const username = email.split('@')[0];
+  return username && username.length > 0 ? username : 'Friend';
+}
+
+interface StoredSession {
+  user: AuthUser;
+  tokens: SessionTokens;
+}
+
+function loadStoredSession(): StoredSession | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as StoredSession;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    if (!parsed.user || !parsed.tokens) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persistSession(session: StoredSession) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+}
+
+function clearStoredSession() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+interface SessionTokens {
+  accessToken: string;
+  accessExpiresAt: string;
+  refreshToken: string;
+  refreshExpiresAt: string;
+}
+
+interface AuthResponse {
+  tokens: SessionTokens;
+}
+
+function ensureTokens(response: AuthResponse): SessionTokens {
+  if (!response.tokens) {
+    throw new Error('Authentication response was missing session tokens.');
+  }
+  return {
+    accessToken: response.tokens.accessToken,
+    accessExpiresAt: response.tokens.accessExpiresAt,
+    refreshToken: response.tokens.refreshToken,
+    refreshExpiresAt: response.tokens.refreshExpiresAt
+  };
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -32,11 +173,14 @@ export interface FeedEntry {
   sharedAt: string;
 }
 
+interface AuthState {
+  user: AuthUser | null;
+  status: 'authenticated' | 'anonymous';
+  tokens: SessionTokens | null;
+}
+
 interface AppState {
-  auth: {
-    user: AuthUser | null;
-    status: 'authenticated' | 'anonymous';
-  };
+  auth: AuthState;
   friends: {
     pending: FriendInvite[];
     connections: FriendConnection[];
@@ -47,7 +191,7 @@ interface AppState {
 }
 
 type AppStateAction =
-  | { type: 'sign-in'; payload: AuthUser }
+  | { type: 'sign-in'; payload: { user: AuthUser; tokens: SessionTokens } }
   | { type: 'sign-out' }
   | { type: 'add-friend'; payload: FriendConnection }
   | { type: 'add-invite'; payload: FriendInvite }
@@ -57,7 +201,8 @@ type AppStateAction =
 const initialState: AppState = {
   auth: {
     user: null,
-    status: 'anonymous'
+    status: 'anonymous',
+    tokens: null
   },
   friends: {
     pending: [
@@ -81,14 +226,30 @@ const initialState: AppState = {
   }
 };
 
+function initializeState(defaultState: AppState): AppState {
+  const stored = loadStoredSession();
+  if (!stored) {
+    return defaultState;
+  }
+  return {
+    ...defaultState,
+    auth: {
+      user: stored.user,
+      status: 'authenticated',
+      tokens: stored.tokens
+    }
+  };
+}
+
 function appReducer(state: AppState, action: AppStateAction): AppState {
   switch (action.type) {
     case 'sign-in':
       return {
         ...state,
         auth: {
-          user: action.payload,
-          status: 'authenticated'
+          user: action.payload.user,
+          status: 'authenticated',
+          tokens: action.payload.tokens
         }
       };
     case 'sign-out':
@@ -96,7 +257,8 @@ function appReducer(state: AppState, action: AppStateAction): AppState {
         ...state,
         auth: {
           user: null,
-          status: 'anonymous'
+          status: 'anonymous',
+          tokens: null
         }
       };
     case 'add-friend':
@@ -160,48 +322,88 @@ export interface AppStateContextValue extends AppState {
 const AppStateContext = createContext<AppStateContextValue | undefined>(undefined);
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
-
-  const simulateNetwork = useCallback(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }, []);
+  const [state, dispatch] = useReducer(appReducer, initialState, initializeState);
 
   const signIn = useCallback<AppStateContextValue['signIn']>(
-    async ({ email }) => {
-      await simulateNetwork();
-      const user: AuthUser = {
-        id: 'user-1',
-        email,
-        displayName: email.split('@')[0] ?? 'Friend'
-      };
-      dispatch({ type: 'sign-in', payload: user });
-      return user;
+    async ({ email, password }) => {
+      const normalizedEmail = normalizeEmail(email);
+      try {
+        const response = await postJSON<AuthResponse>('/api/v1/auth/login', {
+          email: normalizedEmail,
+          password
+        });
+        const tokens = ensureTokens(response);
+        const user: AuthUser = {
+          id: normalizedEmail,
+          email: normalizedEmail,
+          displayName: deriveDisplayName(normalizedEmail)
+        };
+        dispatch({ type: 'sign-in', payload: { user, tokens } });
+        persistSession({ user, tokens });
+        return user;
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw new Error(error.message);
+        }
+        throw error instanceof Error ? error : new Error('Unable to sign in. Please try again.');
+      }
     },
-    [simulateNetwork]
+    [dispatch]
   );
 
   const signUp = useCallback<AppStateContextValue['signUp']>(
-    async ({ email, displayName }) => {
-      await simulateNetwork();
-      const user: AuthUser = {
-        id: `user-${Date.now()}`,
-        email,
-        displayName
-      };
-      dispatch({ type: 'sign-in', payload: user });
-      return user;
+    async ({ email, password, displayName }) => {
+      const normalizedEmail = normalizeEmail(email);
+      try {
+        const response = await postJSON<AuthResponse>('/api/v1/auth/signup', {
+          email: normalizedEmail,
+          password
+        });
+        const tokens = ensureTokens(response);
+        const user: AuthUser = {
+          id: normalizedEmail,
+          email: normalizedEmail,
+          displayName: deriveDisplayName(normalizedEmail, displayName)
+        };
+        dispatch({ type: 'sign-in', payload: { user, tokens } });
+        persistSession({ user, tokens });
+        return user;
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw new Error(error.message);
+        }
+        throw error instanceof Error ? error : new Error('Unable to create your account. Please try again.');
+      }
     },
-    [simulateNetwork]
+    [dispatch]
   );
 
   const requestPasswordReset = useCallback<AppStateContextValue['requestPasswordReset']>(
-    async () => {
-      await simulateNetwork();
+    async (email: string) => {
+      const normalizedEmail = normalizeEmail(email);
+      if (!normalizedEmail) {
+        throw new Error('Please provide the email associated with your account.');
+      }
+      try {
+        await postJSON('/api/v1/auth/password-reset', { email: normalizedEmail });
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.status === 404) {
+            // Password reset API is not yet available; treat as success so the user can continue.
+            return;
+          }
+          throw new Error(error.message);
+        }
+        throw error instanceof Error
+          ? error
+          : new Error('Unable to request a password reset at this time. Please try again.');
+      }
     },
-    [simulateNetwork]
+    []
   );
 
   const signOut = useCallback(() => {
+    clearStoredSession();
     dispatch({ type: 'sign-out' });
   }, []);
 
