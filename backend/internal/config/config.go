@@ -15,6 +15,16 @@ type Config struct {
 	YTDLPPath        string
 	YTDLPTimeout     time.Duration
 	MetadataCacheTTL time.Duration
+	ObjectStore      ObjectStoreConfig
+}
+
+// ObjectStoreConfig captures configuration for the S3/MinIO compatible storage
+// that persists downloaded video assets.
+type ObjectStoreConfig struct {
+	Endpoint      string
+	Bucket        string
+	Region        string
+	PublicBaseURL string
 }
 
 // Load reads configuration from environment variables, applying sensible defaults
@@ -28,6 +38,12 @@ func Load() (Config, error) {
 		YTDLPPath:        getString("VIDFRIENDS_YTDLP_PATH", "yt-dlp"),
 		YTDLPTimeout:     getDuration("VIDFRIENDS_YTDLP_TIMEOUT", 30*time.Second),
 		MetadataCacheTTL: getDuration("VIDFRIENDS_METADATA_CACHE_TTL", 15*time.Minute),
+		ObjectStore: ObjectStoreConfig{
+			Endpoint:      getString("VIDFRIENDS_S3_ENDPOINT", "http://localhost:9000"),
+			Bucket:        getString("VIDFRIENDS_S3_BUCKET", "vidfriends"),
+			Region:        getString("VIDFRIENDS_S3_REGION", "us-east-1"),
+			PublicBaseURL: getString("VIDFRIENDS_S3_PUBLIC_BASE_URL", "http://localhost:9000/vidfriends"),
+		},
 	}
 
 	return cfg, nil
