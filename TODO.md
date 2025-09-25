@@ -19,7 +19,7 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 - [x] Implement authentication flows (signup, login, password reset) against the backend APIs.
  - [x] Build friend list management UI with optimistic updates and error handling.
 - [x] Design the shared video feed with metadata display, reactions, and filtering.
-- [ ] Add frontend unit and integration tests covering critical user journeys.
+- [x] Add frontend unit and integration tests covering critical user journeys.
 
 ## Documentation
 - [ ] Expand `docs/STARTUP.md` with troubleshooting tips for common setup issues.
