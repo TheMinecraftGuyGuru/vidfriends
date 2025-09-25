@@ -10,7 +10,7 @@ state to the feature set described in the documentation.
       regressions are caught automatically.
 - [x] Provide container images or Docker Compose overrides that bundle the
       `yt-dlp` binary and seed data for local onboarding.
-- [ ] Replace the placeholder backend and frontend Dockerfiles with builds that
+- [x] Replace the placeholder backend and frontend Dockerfiles with builds that
       produce runnable images for the real services.
 - [ ] Ensure local configuration templates match the documented repo layout
       (e.g. add or document the missing `configs/` directory references).
