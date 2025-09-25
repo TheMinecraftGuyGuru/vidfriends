@@ -7,7 +7,8 @@ import (
 )
 
 func TestManagerIssueAndRefresh(t *testing.T) {
-	manager := NewManager(time.Minute, time.Hour)
+	store := NewInMemorySessionStore()
+	manager := NewManager(time.Minute, time.Hour, store)
 
 	tokens, err := manager.Issue(context.Background(), "user-1")
 	if err != nil {
@@ -24,23 +25,20 @@ func TestManagerIssueAndRefresh(t *testing.T) {
 	if refreshed.RefreshToken == tokens.RefreshToken {
 		t.Fatal("expected new refresh token")
 	}
-	manager.mu.Lock()
-	_, exists := manager.sessions[tokens.RefreshToken]
-	manager.mu.Unlock()
-	if exists {
+	if store.Has(tokens.RefreshToken) {
 		t.Fatal("old token should have been removed")
 	}
 }
 
 func TestManagerIssueValidation(t *testing.T) {
-	manager := NewManager(time.Minute, time.Hour)
+	manager := NewManager(time.Minute, time.Hour, NewInMemorySessionStore())
 	if _, err := manager.Issue(context.Background(), ""); err == nil {
 		t.Fatal("expected error for empty user id")
 	}
 }
 
 func TestManagerRefreshFailures(t *testing.T) {
-	manager := NewManager(time.Minute, time.Millisecond)
+	manager := NewManager(time.Minute, time.Millisecond, NewInMemorySessionStore())
 
 	if _, err := manager.Refresh(context.Background(), ""); err != ErrSessionNotFound {
 		t.Fatalf("expected session not found got %v", err)

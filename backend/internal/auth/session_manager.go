@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/vidfriends/backend/internal/models"
@@ -18,34 +17,42 @@ var (
 	ErrRefreshTokenExpired = errors.New("refresh token expired")
 )
 
-// Manager manages the lifecycle of issued session tokens in-memory.
-//
-// It is intended for development environments where a shared cache such as Redis is not yet available.
-// Callers should wrap it with appropriate persistence for production deployments.
+// SessionStore persists issued refresh tokens so they can survive process restarts.
+type SessionStore interface {
+	Save(ctx context.Context, session Session) error
+	Find(ctx context.Context, refreshToken string) (Session, error)
+	Delete(ctx context.Context, refreshToken string) error
+}
+
+// Session represents a refresh token issued to a user.
+type Session struct {
+	RefreshToken string
+	UserID       string
+	ExpiresAt    time.Time
+}
+
+// Manager manages the lifecycle of issued session tokens backed by a persistent store.
 type Manager struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 
-	mu       sync.Mutex
-	sessions map[string]sessionRecord
-}
-
-type sessionRecord struct {
-	userID    string
-	expiresAt time.Time
+	store SessionStore
 }
 
 // NewManager constructs a Manager that issues access and refresh tokens with the provided TTLs.
-func NewManager(accessTTL, refreshTTL time.Duration) *Manager {
+func NewManager(accessTTL, refreshTTL time.Duration, store SessionStore) *Manager {
+	if store == nil {
+		panic("auth: session store must not be nil")
+	}
 	return &Manager{
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
-		sessions:   make(map[string]sessionRecord),
+		store:      store,
 	}
 }
 
 // Issue creates a new pair of access and refresh tokens for the provided user identifier.
-func (m *Manager) Issue(_ context.Context, userID string) (models.SessionTokens, error) {
+func (m *Manager) Issue(ctx context.Context, userID string) (models.SessionTokens, error) {
 	if userID == "" {
 		return models.SessionTokens{}, errors.New("user id must be provided")
 	}
@@ -68,44 +75,46 @@ func (m *Manager) Issue(_ context.Context, userID string) (models.SessionTokens,
 		RefreshExpiresAt: now.Add(m.refreshTTL),
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.sessions[refreshToken] = sessionRecord{userID: userID, expiresAt: tokens.RefreshExpiresAt}
+	if err := m.store.Save(ctx, Session{
+		RefreshToken: refreshToken,
+		UserID:       userID,
+		ExpiresAt:    tokens.RefreshExpiresAt,
+	}); err != nil {
+		return models.SessionTokens{}, err
+	}
 
 	return tokens, nil
 }
 
 // Refresh exchanges a refresh token for a new session token pair.
-func (m *Manager) Refresh(_ context.Context, refreshToken string) (models.SessionTokens, error) {
+func (m *Manager) Refresh(ctx context.Context, refreshToken string) (models.SessionTokens, error) {
 	if refreshToken == "" {
 		return models.SessionTokens{}, ErrSessionNotFound
 	}
 
-	m.mu.Lock()
-	record, ok := m.sessions[refreshToken]
-	if !ok {
-		m.mu.Unlock()
-		return models.SessionTokens{}, ErrSessionNotFound
+	session, err := m.store.Find(ctx, refreshToken)
+	if err != nil {
+		return models.SessionTokens{}, err
 	}
-	if time.Now().UTC().After(record.expiresAt) {
-		delete(m.sessions, refreshToken)
-		m.mu.Unlock()
+
+	if time.Now().UTC().After(session.ExpiresAt) {
+		_ = m.store.Delete(ctx, refreshToken)
 		return models.SessionTokens{}, ErrRefreshTokenExpired
 	}
-	delete(m.sessions, refreshToken)
-	m.mu.Unlock()
 
-	return m.Issue(context.Background(), record.userID)
+	if err := m.store.Delete(ctx, refreshToken); err != nil {
+		return models.SessionTokens{}, err
+	}
+
+	return m.Issue(ctx, session.UserID)
 }
 
 // Revoke removes the provided refresh token from the active session store.
-func (m *Manager) Revoke(_ context.Context, refreshToken string) {
+func (m *Manager) Revoke(ctx context.Context, refreshToken string) {
 	if refreshToken == "" {
 		return
 	}
-	m.mu.Lock()
-	delete(m.sessions, refreshToken)
-	m.mu.Unlock()
+	_ = m.store.Delete(ctx, refreshToken)
 }
 
 func randomToken() (string, error) {

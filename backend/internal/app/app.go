@@ -53,9 +53,11 @@ func serve(ctx context.Context) error {
 	ytDlp := videos.NewYTDLPProvider(cfg.YTDLPPath, cfg.YTDLPTimeout)
 	metadataProvider := videos.NewCachingProvider(ytDlp, cfg.MetadataCacheTTL)
 
+	sessionStore := repositories.NewPostgresSessionStore(pool)
+
 	deps := handlers.Dependencies{
 		Users:         repositories.NewPostgresUserRepository(pool),
-		Sessions:      auth.NewManager(15*time.Minute, 24*time.Hour),
+		Sessions:      auth.NewManager(15*time.Minute, 24*time.Hour, sessionStore),
 		Friends:       repositories.NewPostgresFriendRepository(pool),
 		Videos:        repositories.NewPostgresVideoRepository(pool),
 		VideoMetadata: metadataProvider,
