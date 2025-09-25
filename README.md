@@ -1,1 +1,28 @@
-# vidfriends
+# VidFriends
+
+VidFriends is a full-stack video sharing platform with a Go backend, PostgreSQL persistence, and a React + TypeScript frontend. The
+backend exposes REST endpoints for authentication, friendship management, and sharing video links with yt-dlp metadata lookups,
+while the frontend delivers a responsive, dark-themed single-page app for managing your feed.
+
+## Getting started
+
+Use the [Startup Guide](docs/STARTUP.md) for detailed instructions on installing prerequisites, configuring environment
+variables, and running the stack locally or with Docker Compose.
+
+## Project structure
+
+- `backend/` – Go service, pgx-powered data layer, migrations, and HTTP handlers.
+- `frontend/` – React app that authenticates users, manages friends, and renders the feed UI.
+- `migrations/` – SQL migrations executed automatically on service startup.
+- `deploy/` – Docker Compose stack and deployment manifests for containerized development.
+
+Refer to the individual directories for component-specific documentation.
+
+## Contributing
+
+1. Fork the repository and create a feature branch.
+2. Follow the Startup Guide to spin up the stack and run `go test ./...` and `pnpm test` before committing changes.
+3. Open a pull request with a clear description of your changes and testing steps.
+
+Please open an issue if you encounter bugs or have feature requests.
+
