@@ -27,7 +27,7 @@ the sections sequentially and tick each box as you finish the activity.
       `frontend/.env.local`, and `deploy/.env`) and replace placeholder values
       with secrets and connection strings that match your local setup.
 - [ ] Install any optional tooling called out by the script output (e.g.
-      `golangci-lint`, `yt-dlp`, or Docker) so future steps run smoothly.
+      `golangci-lint`, `yt-dlp`, or Docker) so future steps run smoothly and shared videos can be downloaded and stored for playback.
 
 ## 3. Run the stack locally
 

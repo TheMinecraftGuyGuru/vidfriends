@@ -9,7 +9,7 @@ Before diving in ensure the following tooling is available:
 - **PostgreSQL 15+** – locally installed or via Docker Compose using the files under `deploy/`.
 - **Go 1.21+** – required for backend development and running the migration CLI.
 - **Node.js 18+ with pnpm** – used by the Vite-based frontend and its test harness.
-- **yt-dlp** – optional locally; the Docker Compose stack provides it automatically.
+- **yt-dlp** – optional locally; the Docker Compose stack provides it automatically for metadata and video downloads.
 
 Copy the example environment files the first time you set up the project:
 

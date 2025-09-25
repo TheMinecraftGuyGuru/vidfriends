@@ -71,7 +71,8 @@ relationships and exposed ports.
 ### `yt-dlp`
 - **Image**: Lightweight container that only ships the `yt-dlp` binary.
 - **Purpose**: Supplies the backend with a pinned version of `yt-dlp` for video
-  metadata lookups. The binary is shared over a volume mounted at
+  metadata lookups and downloading shared videos so they can be persisted for
+  playback. The binary is shared over a volume mounted at
   `/usr/local/bin/yt-dlp` in the backend container.
 - **Customization**: You can disable this service if you have `yt-dlp` installed
   on the host by updating `YT_DLP_PATH`.
