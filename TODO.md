@@ -10,6 +10,10 @@ state to the feature set described in the documentation.
       regressions are caught automatically.
 - [ ] Provide container images or Docker Compose overrides that bundle the
       `yt-dlp` binary and seed data for local onboarding.
+- [ ] Replace the placeholder backend and frontend Dockerfiles with builds that
+      produce runnable images for the real services.
+- [ ] Ensure local configuration templates match the documented repo layout
+      (e.g. add or document the missing `configs/` directory references).
 
 ## Backend
 - [ ] Implement PostgreSQL-backed repositories for users, friend requests, and
@@ -20,12 +24,18 @@ state to the feature set described in the documentation.
       actually runs migrations using the configured database URL.
 - [ ] Implement the `/api/v1/videos/feed` endpoint backed by repository queries
       that respect a viewer's friendships.
+- [ ] Instantiate concrete service dependencies in the HTTP server so handlers
+      no longer return "service unavailable" for every request.
 - [ ] Add password reset endpoints to match the frontend's expectations or
       adjust the client to avoid broken calls.
 - [ ] Expand handler and repository test coverage with database integration
       tests (using a test container or transactional rollback strategy).
 - [ ] Introduce structured logging and request-scoped context values so errors
       surface actionable metadata.
+- [ ] Update the video ingestion pipeline to download and persist assets when
+      requested instead of invoking `yt-dlp` with `--skip-download`.
+- [ ] Extend configuration loading to honor documented object storage (S3/MinIO)
+      environment variables.
 
 ## Frontend
 - [ ] Replace the hard-coded mock data in `AppStateProvider` with real API calls
@@ -48,3 +58,7 @@ state to the feature set described in the documentation.
       bodies, and authentication requirements.
 - [ ] Document environment variable defaults for both services in a single
       location to reduce duplication between guides.
+- [ ] Remove or revise claims about integrated auth/friendship/video features
+      until the backend endpoints and frontend wiring exist.
+- [ ] Clarify setup guides so commands like `go run ./cmd/vidfriends migrate`
+      explain their current limitations or are updated once the CLI works.
