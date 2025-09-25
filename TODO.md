@@ -5,7 +5,7 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 ## Infrastructure & Tooling
 - [x] Review and document the Docker Compose services in `deploy/` to clarify how the backend, frontend, and database interact.
 - [x] Automate CI workflows to run Go tests, frontend unit tests, and linting on every pull request.
-- [ ] Set up container build automation that publishes multi-architecture images (x86_64 and arm64).
+- [x] Set up container build automation that publishes multi-architecture images (x86_64 and arm64).
 
 ## Backend
 - [ ] Flesh out the Go project structure under `backend/` with handlers, data models, and migrations.
