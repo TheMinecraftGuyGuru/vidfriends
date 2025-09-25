@@ -24,4 +24,4 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 ## Documentation
 - [x] Expand `docs/STARTUP.md` with troubleshooting tips for common setup issues.
 - [x] Document coding standards and linting/prettier configurations for both backend and frontend.
-- [ ] Create contributor guides for running migrations, seeding data, and executing the full test suite locally.
+- [x] Create contributor guides for running migrations, seeding data, and executing the full test suite locally.
