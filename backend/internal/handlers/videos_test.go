@@ -1,0 +1,136 @@
+package handlers
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/vidfriends/backend/internal/models"
+	"github.com/vidfriends/backend/internal/repositories"
+	"github.com/vidfriends/backend/internal/videos"
+)
+
+type videoStoreStub struct {
+	share models.VideoShare
+	err   error
+}
+
+func (s *videoStoreStub) Create(ctx context.Context, share models.VideoShare) error {
+	_ = ctx
+	s.share = share
+	return s.err
+}
+
+func (s *videoStoreStub) ListFeed(ctx context.Context, userID string) ([]models.VideoShare, error) {
+	_ = ctx
+	_ = userID
+	return nil, errors.New("not implemented")
+}
+
+type metadataProviderStub struct {
+	metadata videos.Metadata
+	err      error
+}
+
+func (m metadataProviderStub) Lookup(ctx context.Context, url string) (videos.Metadata, error) {
+	return m.metadata, m.err
+}
+
+func TestVideoHandlerCreateSuccess(t *testing.T) {
+	store := &videoStoreStub{}
+	metadata := metadataProviderStub{metadata: videos.Metadata{Title: "Test", Description: "Desc", Thumbnail: "thumb.jpg"}}
+
+	handler := VideoHandler{
+		Videos:   store,
+		Metadata: metadata,
+		NowFunc: func() time.Time {
+			return time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC)
+		},
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"ownerId": "user-123",
+		"url":     "https://example.com/watch?v=123",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("unexpected status: got %d want %d", rec.Code, http.StatusCreated)
+	}
+
+	if store.share.ID == "" {
+		t.Fatal("expected share ID to be set")
+	}
+	if store.share.Title != "Test" || store.share.Description != "Desc" || store.share.Thumbnail != "thumb.jpg" {
+		t.Fatalf("unexpected share metadata: %+v", store.share)
+	}
+	if store.share.OwnerID != "user-123" || store.share.URL != "https://example.com/watch?v=123" {
+		t.Fatalf("unexpected share data: %+v", store.share)
+	}
+	if !store.share.CreatedAt.Equal(time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("unexpected created at: %v", store.share.CreatedAt)
+	}
+
+	var resp createVideoResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Share.ID != store.share.ID {
+		t.Fatalf("response share mismatch: got %s want %s", resp.Share.ID, store.share.ID)
+	}
+}
+
+func TestVideoHandlerCreateMetadataError(t *testing.T) {
+	handler := VideoHandler{
+		Videos:   &videoStoreStub{},
+		Metadata: metadataProviderStub{err: errors.New("boom")},
+	}
+
+	body := bytes.NewBufferString(`{"ownerId":"user","url":"https://example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", body)
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("unexpected status: got %d want %d", rec.Code, http.StatusBadGateway)
+	}
+}
+
+func TestVideoHandlerCreateStoreConflict(t *testing.T) {
+	handler := VideoHandler{
+		Videos:   &videoStoreStub{err: repositories.ErrConflict},
+		Metadata: metadataProviderStub{metadata: videos.Metadata{Title: "Test"}},
+	}
+
+	body := bytes.NewBufferString(`{"ownerId":"user","url":"https://example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", body)
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("unexpected status: got %d want %d", rec.Code, http.StatusConflict)
+	}
+}
+
+func TestVideoHandlerCreateMissingDeps(t *testing.T) {
+	handler := VideoHandler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewBufferString(`{}`))
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: got %d want %d", rec.Code, http.StatusInternalServerError)
+	}
+}

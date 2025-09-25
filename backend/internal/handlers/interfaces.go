@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vidfriends/backend/internal/models"
+	"github.com/vidfriends/backend/internal/videos"
 )
 
 // UserStore captures the persistence operations required by the auth handlers.
@@ -29,4 +30,9 @@ type FriendStore interface {
 type VideoStore interface {
 	Create(ctx context.Context, share models.VideoShare) error
 	ListFeed(ctx context.Context, userID string) ([]models.VideoShare, error)
+}
+
+// VideoMetadataProvider resolves video details for shared URLs.
+type VideoMetadataProvider interface {
+	Lookup(ctx context.Context, url string) (videos.Metadata, error)
 }

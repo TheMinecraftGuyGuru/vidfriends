@@ -16,6 +16,7 @@ import (
 	"github.com/vidfriends/backend/internal/db"
 	"github.com/vidfriends/backend/internal/handlers"
 	"github.com/vidfriends/backend/internal/httpserver"
+	"github.com/vidfriends/backend/internal/videos"
 )
 
 // Run bootstraps the VidFriends backend application.
@@ -48,11 +49,15 @@ func serve(ctx context.Context) error {
 	}
 	defer pool.Close()
 
+	ytDlp := videos.NewYTDLPProvider(cfg.YTDLPPath, cfg.YTDLPTimeout)
+	metadataProvider := videos.NewCachingProvider(ytDlp, cfg.MetadataCacheTTL)
+
 	deps := handlers.Dependencies{
-		Users:    nil,
-		Sessions: auth.NewManager(15*time.Minute, 24*time.Hour),
-		Friends:  nil,
-		Videos:   nil,
+		Users:         nil,
+		Sessions:      auth.NewManager(15*time.Minute, 24*time.Hour),
+		Friends:       nil,
+		Videos:        nil,
+		VideoMetadata: metadataProvider,
 	}
 
 	mux := http.NewServeMux()
