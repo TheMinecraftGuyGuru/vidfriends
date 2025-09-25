@@ -32,7 +32,7 @@ state to the feature set described in the documentation.
       tests (using a test container or transactional rollback strategy).
 - [x] Introduce structured logging and request-scoped context values so errors
       surface actionable metadata.
-- [ ] Update the video ingestion pipeline to download and persist assets when
+- [x] Update the video ingestion pipeline to download and persist assets when
       requested instead of invoking `yt-dlp` with `--skip-download`.
 - [ ] Extend configuration loading to honor documented object storage (S3/MinIO)
       environment variables.
