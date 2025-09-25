@@ -16,6 +16,7 @@ import (
 	"github.com/vidfriends/backend/internal/db"
 	"github.com/vidfriends/backend/internal/handlers"
 	"github.com/vidfriends/backend/internal/httpserver"
+	"github.com/vidfriends/backend/internal/middleware"
 )
 
 // Run bootstraps the VidFriends backend application.
@@ -40,7 +41,8 @@ func serve(ctx context.Context) error {
 		return err
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
+	slog.SetDefault(logger)
 
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -53,7 +55,9 @@ func serve(ctx context.Context) error {
 	mux := http.NewServeMux()
 	handlers.RegisterRoutes(mux, deps)
 
-	srv := httpserver.New(cfg.AppPort, mux)
+	handler := middleware.RequestLogger(logger)(mux)
+
+	srv := httpserver.New(cfg.AppPort, handler)
 
 	logger.Info("starting http server", "port", cfg.AppPort)
 

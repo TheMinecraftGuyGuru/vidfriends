@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/vidfriends/backend/internal/logging"
 	"github.com/vidfriends/backend/internal/models"
 	"github.com/vidfriends/backend/internal/repositories"
 	"github.com/vidfriends/backend/internal/videos"
@@ -29,36 +30,44 @@ func (h VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+	logger := logging.FromContext(ctx)
+
 	if h.Videos == nil || h.Metadata == nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "video services unavailable"})
+		logger.Error("video services unavailable", "hasVideos", h.Videos != nil, "hasMetadata", h.Metadata != nil)
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "video services unavailable"})
 		return
 	}
 
 	var req createVideoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		logger.Warn("invalid create video payload", "error", err)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
 	req.OwnerID = strings.TrimSpace(req.OwnerID)
 	req.URL = strings.TrimSpace(req.URL)
 	if req.OwnerID == "" || req.URL == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "ownerId and url are required"})
+		logger.Warn("missing create video fields", "ownerId", req.OwnerID, "url", req.URL)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "ownerId and url are required"})
 		return
 	}
 
 	if _, err := url.ParseRequestURI(req.URL); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid url"})
+		logger.Warn("invalid video url", "url", req.URL, "error", err)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid url"})
 		return
 	}
 
-	metadata, err := h.Metadata.Lookup(r.Context(), req.URL)
+	metadata, err := h.Metadata.Lookup(ctx, req.URL)
 	if err != nil {
 		status := http.StatusBadGateway
 		if errors.Is(err, videos.ErrProviderUnavailable) {
 			status = http.StatusInternalServerError
 		}
-		respondJSON(w, status, map[string]string{"error": "failed to fetch video metadata"})
+		logger.Error("failed to lookup video metadata", "error", err, "url", req.URL)
+		respondJSON(ctx, w, status, map[string]string{"error": "failed to fetch video metadata"})
 		return
 	}
 
@@ -73,16 +82,17 @@ func (h VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   now,
 	}
 
-	if err := h.Videos.Create(r.Context(), share); err != nil {
+	if err := h.Videos.Create(ctx, share); err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, repositories.ErrConflict) {
 			status = http.StatusConflict
 		}
-		respondJSON(w, status, map[string]string{"error": "failed to store video share"})
+		logger.Error("failed to persist video share", "error", err, "ownerId", share.OwnerID, "url", share.URL)
+		respondJSON(ctx, w, status, map[string]string{"error": "failed to store video share"})
 		return
 	}
 
-	respondJSON(w, http.StatusCreated, createVideoResponse{Share: share})
+	respondJSON(ctx, w, http.StatusCreated, createVideoResponse{Share: share})
 }
 
 // Feed handles GET /api/v1/videos/feed.
@@ -92,24 +102,30 @@ func (h VideoHandler) Feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+	logger := logging.FromContext(ctx)
+
 	if h.Videos == nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "video service unavailable"})
+		logger.Error("video service unavailable")
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "video service unavailable"})
 		return
 	}
 
 	userID := strings.TrimSpace(r.URL.Query().Get("user"))
 	if userID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "user query parameter is required"})
+		logger.Warn("feed missing user id")
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "user query parameter is required"})
 		return
 	}
 
-	feed, err := h.Videos.ListFeed(r.Context(), userID)
+	feed, err := h.Videos.ListFeed(ctx, userID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch video feed"})
+		logger.Error("failed to load video feed", "error", err, "userId", userID)
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch video feed"})
 		return
 	}
 
-	respondJSON(w, http.StatusOK, feedResponse{Entries: feed})
+	respondJSON(ctx, w, http.StatusOK, feedResponse{Entries: feed})
 }
 
 func (h VideoHandler) now() time.Time {
