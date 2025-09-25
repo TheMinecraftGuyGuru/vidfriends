@@ -8,7 +8,7 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 - [x] Set up container build automation that publishes multi-architecture images (x86_64 and arm64).
 
 ## Backend
-- [ ] Flesh out the Go project structure under `backend/` with handlers, data models, and migrations.
+- [x] Flesh out the Go project structure under `backend/` with handlers, data models, and migrations.
 - [ ] Implement authentication endpoints, including session management and token refresh.
 - [ ] Add friend management APIs (invite, accept, block) with appropriate database migrations.
 - [ ] Integrate yt-dlp metadata lookups for shared video links and cache results.
