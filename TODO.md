@@ -11,7 +11,7 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 - [x] Flesh out the Go project structure under `backend/` with handlers, data models, and migrations.
 - [x] Implement authentication endpoints, including session management and token refresh.
 - [x] Add friend management APIs (invite, accept, block) with appropriate database migrations.
-- [ ] Integrate yt-dlp metadata lookups for shared video links and cache results.
+- [x] Integrate yt-dlp metadata lookups for shared video links and cache results.
 - [ ] Write comprehensive Go tests for handlers, repositories, and domain logic.
 
 ## Frontend
