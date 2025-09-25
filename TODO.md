@@ -47,7 +47,7 @@ state to the feature set described in the documentation.
       `/api/v1/auth/refresh` endpoint before the access token expires.
 - [x] Implement a share-video form that calls the backend and handles metadata
       lookup latency states.
-- [ ] Add Vitest/RTL coverage for the dashboard widgets, auth forms, and state
+- [x] Add Vitest/RTL coverage for the dashboard widgets, auth forms, and state
       reducer logic.
 
 ## Documentation
