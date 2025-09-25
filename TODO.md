@@ -34,7 +34,7 @@ state to the feature set described in the documentation.
       surface actionable metadata.
 - [x] Update the video ingestion pipeline to download and persist assets when
       requested instead of invoking `yt-dlp` with `--skip-download`.
-- [ ] Extend configuration loading to honor documented object storage (S3/MinIO)
+- [x] Extend configuration loading to honor documented object storage (S3/MinIO)
       environment variables.
 
 ## Frontend
