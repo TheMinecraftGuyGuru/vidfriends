@@ -11,6 +11,7 @@ without installing the toolchain directly on your workstation.
 | ---- | ------- |
 | `docker-compose.yml` | Defines the multi-service stack. |
 | `.env.example` | Template for Compose-level environment variables shared between services. Copy it to `.env` and edit the secrets before running the stack. |
+| `docker/` | Dockerfiles used by the CI pipeline to build multi-architecture backend and frontend images. |
 
 > **Note:** Service-specific `.env` files still live alongside the backend and
 > frontend projects. The Compose file mounts them automatically so you can keep
@@ -90,6 +91,28 @@ When the stack is running:
 - Connect to PostgreSQL with `psql` using the credentials defined in `.env`.
 
 Stop services with `docker compose down`. Add `-v` to wipe the database volume.
+
+## Automated image builds
+
+The repository publishes multi-architecture container images (x86_64/amd64 and
+arm64) for the backend and frontend whenever changes land on `main`, a release
+is published, or the workflow is triggered manually. The GitHub Actions workflow
+[`container-build.yml`](../.github/workflows/container-build.yml) uses Docker
+Buildx with QEMU emulation to produce and push manifests to the GitHub Container
+Registry under `ghcr.io/<org>/<repo>-<service>`.
+
+If you need to test builds locally with the same configuration, install
+Docker Buildx and run:
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --file deploy/docker/backend.Dockerfile \
+  --tag ghcr.io/<your-namespace>/vidfriends-backend:dev \
+  .
+```
+
+Replace the Dockerfile path and tag for the frontend image as needed.
 
 ## Troubleshooting
 
