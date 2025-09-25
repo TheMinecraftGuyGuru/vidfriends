@@ -22,7 +22,7 @@ state to the feature set described in the documentation.
       make it pluggable so access/refresh tokens survive process restarts.
 - [x] Flesh out the migration CLI (`go run ./cmd/vidfriends migrate ...`) so it
       actually runs migrations using the configured database URL.
-- [ ] Implement the `/api/v1/videos/feed` endpoint backed by repository queries
+- [x] Implement the `/api/v1/videos/feed` endpoint backed by repository queries
       that respect a viewer's friendships.
 - [ ] Instantiate concrete service dependencies in the HTTP server so handlers
       no longer return "service unavailable" for every request.

@@ -92,9 +92,24 @@ func (h VideoHandler) Feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusNotImplemented, map[string]string{
-		"message": "video feed not yet implemented",
-	})
+	if h.Videos == nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "video service unavailable"})
+		return
+	}
+
+	userID := strings.TrimSpace(r.URL.Query().Get("user"))
+	if userID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "user query parameter is required"})
+		return
+	}
+
+	feed, err := h.Videos.ListFeed(r.Context(), userID)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch video feed"})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, feedResponse{Entries: feed})
 }
 
 func (h VideoHandler) now() time.Time {
@@ -111,4 +126,8 @@ type createVideoRequest struct {
 
 type createVideoResponse struct {
 	Share models.VideoShare `json:"share"`
+}
+
+type feedResponse struct {
+	Entries []models.VideoShare `json:"entries"`
 }
