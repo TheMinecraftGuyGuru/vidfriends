@@ -181,6 +181,47 @@ func (h AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, authResponse{Tokens: tokens})
 }
 
+// RequestPasswordReset handles POST /api/v1/auth/password-reset requests.
+func (h AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.Users == nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "authentication services unavailable"})
+		return
+	}
+
+	var req passwordResetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	if req.Email == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "email is required"})
+		return
+	}
+
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email address"})
+		return
+	}
+
+	if _, err := h.Users.FindByEmail(r.Context(), req.Email); err != nil {
+		if !errors.Is(err, repositories.ErrNotFound) {
+			respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "unable to process password reset"})
+			return
+		}
+	}
+
+	respondJSON(w, http.StatusAccepted, map[string]string{
+		"status": "If an account exists for that email, password reset instructions have been sent.",
+	})
+}
+
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -193,6 +234,10 @@ type signUpRequest struct {
 
 type refreshRequest struct {
 	RefreshToken string `json:"refreshToken"`
+}
+
+type passwordResetRequest struct {
+	Email string `json:"email"`
 }
 
 type authResponse struct {

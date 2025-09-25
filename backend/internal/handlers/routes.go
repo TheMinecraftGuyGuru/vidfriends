@@ -13,6 +13,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Dependencies) {
 	mux.HandleFunc("/api/v1/auth/login", auth.Login)
 	mux.HandleFunc("/api/v1/auth/signup", auth.SignUp)
 	mux.HandleFunc("/api/v1/auth/refresh", auth.Refresh)
+	mux.HandleFunc("/api/v1/auth/password-reset", auth.RequestPasswordReset)
 	mux.HandleFunc("/api/v1/friends", friends.List)
 	mux.HandleFunc("/api/v1/friends/invite", friends.Invite)
 	mux.HandleFunc("/api/v1/friends/respond", friends.Respond)

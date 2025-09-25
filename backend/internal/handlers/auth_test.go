@@ -379,3 +379,89 @@ func TestAuthHandlerRefreshFailures(t *testing.T) {
 		t.Fatalf("expected unauthorized got %d", rec.Code)
 	}
 }
+
+func TestAuthHandlerRequestPasswordReset(t *testing.T) {
+	store := newInMemoryUserStore()
+	store.users["user@example.com"] = models.User{Email: "user@example.com"}
+
+	handler := AuthHandler{Users: store}
+
+	body, err := json.Marshal(passwordResetRequest{Email: "user@example.com"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.RequestPasswordReset(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d got %d", http.StatusAccepted, rec.Code)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp["status"] == "" {
+		t.Fatal("expected a status message in response")
+	}
+
+	body, err = json.Marshal(passwordResetRequest{Email: "missing@example.com"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+
+	handler.RequestPasswordReset(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d for unknown email got %d", http.StatusAccepted, rec.Code)
+	}
+}
+
+func TestAuthHandlerRequestPasswordResetFailures(t *testing.T) {
+	store := newInMemoryUserStore()
+
+	cases := []struct {
+		name       string
+		handler    AuthHandler
+		method     string
+		body       []byte
+		wantStatus int
+	}{
+		{"methodNotAllowed", AuthHandler{Users: store}, http.MethodGet, nil, http.StatusMethodNotAllowed},
+		{"missingStore", AuthHandler{}, http.MethodPost, nil, http.StatusInternalServerError},
+		{"invalidJSON", AuthHandler{Users: store}, http.MethodPost, []byte("{"), http.StatusBadRequest},
+		{"emptyEmail", AuthHandler{Users: store}, http.MethodPost, []byte(`{"email":""}`), http.StatusBadRequest},
+		{"invalidEmail", AuthHandler{Users: store}, http.MethodPost, []byte(`{"email":"bad"}`), http.StatusBadRequest},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, "/api/v1/auth/password-reset", bytes.NewReader(tc.body))
+			rec := httptest.NewRecorder()
+
+			tc.handler.RequestPasswordReset(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("expected status %d got %d", tc.wantStatus, rec.Code)
+			}
+		})
+	}
+
+	handler := AuthHandler{Users: failingUserStore{findErr: errors.New("query failed")}}
+	body, _ := json.Marshal(passwordResetRequest{Email: "user@example.com"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.RequestPasswordReset(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected internal error got %d", rec.Code)
+	}
+}
