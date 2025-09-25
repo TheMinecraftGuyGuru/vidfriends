@@ -134,3 +134,84 @@ func TestVideoHandlerCreateMissingDeps(t *testing.T) {
 		t.Fatalf("unexpected status: got %d want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
+
+func TestVideoHandlerCreateValidationFailures(t *testing.T) {
+	handler := VideoHandler{Videos: &videoStoreStub{}, Metadata: metadataProviderStub{metadata: videos.Metadata{}}}
+
+	cases := []struct {
+		name       string
+		method     string
+		body       string
+		wantStatus int
+	}{
+		{"wrongMethod", http.MethodGet, `{"ownerId":"u","url":"https://example.com"}`, http.StatusMethodNotAllowed},
+		{"badJSON", http.MethodPost, "{", http.StatusBadRequest},
+		{"missingFields", http.MethodPost, `{"ownerId":"","url":""}`, http.StatusBadRequest},
+		{"invalidURL", http.MethodPost, `{"ownerId":"user","url":"not-a-url"}`, http.StatusBadRequest},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, "/api/v1/videos", bytes.NewBufferString(tc.body))
+			rec := httptest.NewRecorder()
+
+			handler.Create(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("expected status %d got %d", tc.wantStatus, rec.Code)
+			}
+		})
+	}
+}
+
+func TestVideoHandlerCreateProviderUnavailable(t *testing.T) {
+	handler := VideoHandler{
+		Videos:   &videoStoreStub{},
+		Metadata: metadataProviderStub{err: videos.ErrProviderUnavailable},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewBufferString(`{"ownerId":"u","url":"https://example.com"}`))
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 got %d", rec.Code)
+	}
+}
+
+func TestVideoHandlerCreateStoreFailure(t *testing.T) {
+	handler := VideoHandler{
+		Videos:   &videoStoreStub{err: errors.New("insert failed")},
+		Metadata: metadataProviderStub{metadata: videos.Metadata{Title: "ok"}},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewBufferString(`{"ownerId":"u","url":"https://example.com"}`))
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 got %d", rec.Code)
+	}
+}
+
+func TestVideoHandlerFeedNotImplemented(t *testing.T) {
+	handler := VideoHandler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/videos/feed", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Feed(rec, req)
+
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/videos/feed", nil)
+	rec = httptest.NewRecorder()
+	handler.Feed(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 got %d", rec.Code)
+	}
+}
