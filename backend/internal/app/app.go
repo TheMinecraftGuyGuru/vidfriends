@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/vidfriends/backend/internal/auth"
 	"github.com/vidfriends/backend/internal/config"
 	"github.com/vidfriends/backend/internal/db"
 	"github.com/vidfriends/backend/internal/handlers"
@@ -47,9 +49,10 @@ func serve(ctx context.Context) error {
 	defer pool.Close()
 
 	deps := handlers.Dependencies{
-		Users:   nil,
-		Friends: nil,
-		Videos:  nil,
+		Users:    nil,
+		Sessions: auth.NewManager(15*time.Minute, 24*time.Hour),
+		Friends:  nil,
+		Videos:   nil,
 	}
 
 	mux := http.NewServeMux()

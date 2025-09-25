@@ -31,3 +31,11 @@ type VideoShare struct {
 	Thumbnail   string
 	CreatedAt   time.Time
 }
+
+// SessionTokens groups the bearer credentials issued to authenticated users.
+type SessionTokens struct {
+	AccessToken      string
+	AccessExpiresAt  time.Time
+	RefreshToken     string
+	RefreshExpiresAt time.Time
+}

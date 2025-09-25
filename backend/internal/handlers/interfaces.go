@@ -12,6 +12,12 @@ type UserStore interface {
 	FindByEmail(ctx context.Context, email string) (models.User, error)
 }
 
+// SessionManager issues and refreshes authentication tokens for users.
+type SessionManager interface {
+	Issue(ctx context.Context, userID string) (models.SessionTokens, error)
+	Refresh(ctx context.Context, refreshToken string) (models.SessionTokens, error)
+}
+
 // FriendStore captures operations required by the friend handlers.
 type FriendStore interface {
 	CreateRequest(ctx context.Context, request models.FriendRequest) error
