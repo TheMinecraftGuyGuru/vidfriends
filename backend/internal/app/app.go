@@ -16,6 +16,7 @@ import (
 	"github.com/vidfriends/backend/internal/db"
 	"github.com/vidfriends/backend/internal/handlers"
 	"github.com/vidfriends/backend/internal/httpserver"
+	"github.com/vidfriends/backend/internal/repositories"
 	"github.com/vidfriends/backend/internal/videos"
 )
 
@@ -53,10 +54,10 @@ func serve(ctx context.Context) error {
 	metadataProvider := videos.NewCachingProvider(ytDlp, cfg.MetadataCacheTTL)
 
 	deps := handlers.Dependencies{
-		Users:         nil,
+		Users:         repositories.NewPostgresUserRepository(pool),
 		Sessions:      auth.NewManager(15*time.Minute, 24*time.Hour),
-		Friends:       nil,
-		Videos:        nil,
+		Friends:       repositories.NewPostgresFriendRepository(pool),
+		Videos:        repositories.NewPostgresVideoRepository(pool),
 		VideoMetadata: metadataProvider,
 	}
 

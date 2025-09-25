@@ -16,7 +16,7 @@ state to the feature set described in the documentation.
       (e.g. add or document the missing `configs/` directory references).
 
 ## Backend
-- [ ] Implement PostgreSQL-backed repositories for users, friend requests, and
+- [x] Implement PostgreSQL-backed repositories for users, friend requests, and
       video shares, then wire them into the HTTP handlers.
 - [ ] Replace the in-memory session manager with a persistence-aware solution or
       make it pluggable so access/refresh tokens survive process restarts.
