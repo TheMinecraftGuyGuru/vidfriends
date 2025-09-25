@@ -8,7 +8,7 @@ state to the feature set described in the documentation.
       database migrations) for both services.
 - [x] Configure CI to run `go test ./...`, frontend unit tests, and linting so
       regressions are caught automatically.
-- [ ] Provide container images or Docker Compose overrides that bundle the
+- [x] Provide container images or Docker Compose overrides that bundle the
       `yt-dlp` binary and seed data for local onboarding.
 
 ## Backend
