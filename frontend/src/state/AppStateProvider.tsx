@@ -196,6 +196,7 @@ type AppStateAction =
   | { type: 'add-friend'; payload: FriendConnection }
   | { type: 'add-invite'; payload: FriendInvite }
   | { type: 'resolve-invite'; payload: { inviteId: string; accepted: boolean } }
+  | { type: 'remove-friend'; payload: { friendId: string } }
   | { type: 'share-video'; payload: FeedEntry };
 
 const initialState: AppState = {
@@ -297,6 +298,14 @@ function appReducer(state: AppState, action: AppStateAction): AppState {
         }
       };
     }
+    case 'remove-friend':
+      return {
+        ...state,
+        friends: {
+          ...state.friends,
+          connections: state.friends.connections.filter((friend) => friend.id !== action.payload.friendId)
+        }
+      };
     case 'share-video':
       return {
         ...state,
@@ -316,6 +325,7 @@ export interface AppStateContextValue extends AppState {
   signOut: () => void;
   acceptInvite: (inviteId: string) => void;
   declineInvite: (inviteId: string) => void;
+  respondToInvite: (inviteId: string, accepted: boolean) => Promise<void>;
   shareVideo: (entry: Pick<FeedEntry, 'title'>) => void;
 }
 
@@ -415,6 +425,43 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'resolve-invite', payload: { inviteId, accepted: false } });
   }, []);
 
+  const respondToInvite = useCallback<AppStateContextValue['respondToInvite']>(
+    async (inviteId, accepted) => {
+      const invite = state.friends.pending.find((item) => item.id === inviteId);
+      if (!invite) {
+        throw new Error('This invitation is no longer available.');
+      }
+
+      dispatch({ type: 'resolve-invite', payload: { inviteId, accepted } });
+
+      try {
+        if (API_BASE_URL) {
+          await postJSON('/api/v1/friends/invitations/respond', {
+            inviteId,
+            accepted
+          });
+        } else {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 400);
+          });
+        }
+      } catch (error) {
+        if (accepted) {
+          dispatch({ type: 'remove-friend', payload: { friendId: inviteId } });
+        }
+        dispatch({ type: 'add-invite', payload: invite });
+
+        if (error instanceof ApiError) {
+          throw new Error(error.message);
+        }
+        throw error instanceof Error
+          ? error
+          : new Error('Unable to update the invitation at this time. Please try again.');
+      }
+    },
+    [state.friends.pending]
+  );
+
   const shareVideo = useCallback<AppStateContextValue['shareVideo']>(
     (entry) => {
       dispatch({
@@ -439,9 +486,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       signOut,
       acceptInvite,
       declineInvite,
+      respondToInvite,
       shareVideo
     }),
-    [state, acceptInvite, declineInvite, requestPasswordReset, shareVideo, signIn, signOut, signUp]
+    [
+      state,
+      acceptInvite,
+      declineInvite,
+      requestPasswordReset,
+      respondToInvite,
+      shareVideo,
+      signIn,
+      signOut,
+      signUp
+    ]
   );
 
   return <AppStateContext.Provider value={contextValue}>{children}</AppStateContext.Provider>;

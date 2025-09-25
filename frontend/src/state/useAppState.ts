@@ -16,6 +16,7 @@ export function useAppState() {
       shareVideo: context.shareVideo,
       acceptInvite: context.acceptInvite,
       declineInvite: context.declineInvite,
+      respondToInvite: context.respondToInvite,
       requestPasswordReset: context.requestPasswordReset
     }),
     [context]
