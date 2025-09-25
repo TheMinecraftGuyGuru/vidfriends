@@ -14,9 +14,9 @@ Before diving in ensure the following tooling is available:
 Copy the example environment files the first time you set up the project:
 
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-cp deploy/.env.example deploy/.env # only if you are using docker compose
+cp configs/backend.env.example backend/.env
+cp configs/frontend.env.example frontend/.env
+cp configs/deploy.env.example deploy/.env # only if you are using docker compose
 ```
 
 Update credentials and secrets inside the copied files. The backend `.env` must include `VIDFRIENDS_DATABASE_URL` that points at the database you plan to use for development/testing.
