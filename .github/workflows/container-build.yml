@@ -64,7 +64,7 @@ jobs:
             org.opencontainers.image.source=${{ github.repositoryUrl }}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
