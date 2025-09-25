@@ -247,8 +247,6 @@ func (r *PostgresVideoRepository) Create(ctx context.Context, share models.Video
 
 // ListFeed returns a simple reverse chronological feed of shared videos.
 func (r *PostgresVideoRepository) ListFeed(ctx context.Context, userID string) ([]models.VideoShare, error) {
-	_ = userID
-
 	conn, err := r.pool.Acquire(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("acquire connection: %w", err)
@@ -256,11 +254,22 @@ func (r *PostgresVideoRepository) ListFeed(ctx context.Context, userID string) (
 	defer conn.Release()
 
 	rows, err := conn.Query(ctx, `
+        WITH accepted_friends AS (
+            SELECT DISTINCT
+                CASE
+                    WHEN fr.requester_id = $1 THEN fr.receiver_id
+                    ELSE fr.requester_id
+                END AS friend_id
+            FROM friend_requests fr
+            WHERE fr.status = 'accepted'
+              AND (fr.requester_id = $1 OR fr.receiver_id = $1)
+        )
         SELECT id, owner_id, url, title, description, thumbnail, created_at
         FROM video_shares
+        WHERE owner_id = $1 OR owner_id IN (SELECT friend_id FROM accepted_friends)
         ORDER BY created_at DESC
         LIMIT 100
-    `)
+    `, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query video feed: %w", err)
 	}
