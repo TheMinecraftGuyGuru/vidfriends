@@ -4,7 +4,7 @@ A curated list of follow-up work to bring the platform from the current prototyp
 state to the feature set described in the documentation.
 
 ## Infrastructure & Tooling
-- [ ] Add a Makefile or task runner that wraps common workflows (tests, lint,
+- [x] Add a Makefile or task runner that wraps common workflows (tests, lint,
       database migrations) for both services.
 - [ ] Configure CI to run `go test ./...`, frontend unit tests, and linting so
       regressions are caught automatically.
