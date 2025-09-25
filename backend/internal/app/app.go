@@ -11,15 +11,11 @@ import (
 	"path/filepath"
 	"sort"
 	"syscall"
-	"time"
 
-	"github.com/vidfriends/backend/internal/auth"
 	"github.com/vidfriends/backend/internal/config"
 	"github.com/vidfriends/backend/internal/db"
 	"github.com/vidfriends/backend/internal/handlers"
 	"github.com/vidfriends/backend/internal/httpserver"
-	"github.com/vidfriends/backend/internal/repositories"
-	"github.com/vidfriends/backend/internal/videos"
 )
 
 // Run bootstraps the VidFriends backend application.
@@ -52,18 +48,7 @@ func serve(ctx context.Context) error {
 	}
 	defer pool.Close()
 
-	ytDlp := videos.NewYTDLPProvider(cfg.YTDLPPath, cfg.YTDLPTimeout)
-	metadataProvider := videos.NewCachingProvider(ytDlp, cfg.MetadataCacheTTL)
-
-	sessionStore := repositories.NewPostgresSessionStore(pool)
-
-	deps := handlers.Dependencies{
-		Users:         repositories.NewPostgresUserRepository(pool),
-		Sessions:      auth.NewManager(15*time.Minute, 24*time.Hour, sessionStore),
-		Friends:       repositories.NewPostgresFriendRepository(pool),
-		Videos:        repositories.NewPostgresVideoRepository(pool),
-		VideoMetadata: metadataProvider,
-	}
+	deps := buildDependencies(pool, cfg)
 
 	mux := http.NewServeMux()
 	handlers.RegisterRoutes(mux, deps)
