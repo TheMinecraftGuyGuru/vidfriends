@@ -15,7 +15,7 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 - [x] Write comprehensive Go tests for handlers, repositories, and domain logic.
 
 ## Frontend
-- [ ] Scaffold the React + TypeScript application under `frontend/` with routing and global state management.
+- [x] Scaffold the React + TypeScript application under `frontend/` with routing and global state management.
 - [ ] Implement authentication flows (signup, login, password reset) against the backend APIs.
 - [ ] Build friend list management UI with optimistic updates and error handling.
 - [ ] Design the shared video feed with metadata display, reactions, and filtering.
