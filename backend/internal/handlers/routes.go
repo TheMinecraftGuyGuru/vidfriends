@@ -7,7 +7,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Dependencies) {
 	health := HealthHandler{}
 	auth := AuthHandler{Users: deps.Users, Sessions: deps.Sessions}
 	friends := FriendHandler{Friends: deps.Friends}
-        videos := VideoHandler{Videos: deps.Videos, Metadata: deps.VideoMetadata}
+	videos := VideoHandler{Videos: deps.Videos, Metadata: deps.VideoMetadata}
 
 	mux.HandleFunc("/healthz", health.Handle)
 	mux.HandleFunc("/api/v1/auth/login", auth.Login)
@@ -22,9 +22,9 @@ func RegisterRoutes(mux *http.ServeMux, deps Dependencies) {
 
 // Dependencies aggregates collaborators required by HTTP handlers.
 type Dependencies struct {
-        Users    UserStore
-        Sessions SessionManager
-        Friends  FriendStore
-        Videos   VideoStore
-        VideoMetadata VideoMetadataProvider
+	Users         UserStore
+	Sessions      SessionManager
+	Friends       FriendStore
+	Videos        VideoStore
+	VideoMetadata VideoMetadataProvider
 }

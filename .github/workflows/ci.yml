@@ -2,9 +2,14 @@ name: CI
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
   push:
-    branches: [ main ]
+    branches: [main]
+
+env:
+  GO_VERSION_FILE: backend/go.mod
+  FALLBACK_GO_VERSION: '1.21'
+  NODE_VERSION: '18'
 
 jobs:
   go-tests:
@@ -17,8 +22,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: backend/go.mod
-          fallback-go-version: '1.21'
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          fallback-go-version: ${{ env.FALLBACK_GO_VERSION }}
 
       - name: Run Go unit tests
         working-directory: backend
@@ -39,34 +44,24 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: |
-            frontend/package-lock.json
-            frontend/pnpm-lock.yaml
-            frontend/yarn.lock
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install dependencies and run tests
+      - name: Install dependencies
         working-directory: frontend
         run: |
-          if [ -f package.json ]; then
-            if [ -f pnpm-lock.yaml ]; then
-              corepack enable pnpm
-              pnpm install --frozen-lockfile
-              pnpm test -- --watch=false
-            elif [ -f package-lock.json ]; then
-              npm ci
-              npm test -- --watch=false
-            elif [ -f yarn.lock ]; then
-              corepack enable
-              yarn install --immutable
-              yarn test --watch=false
-            else
-              npm install
-              npm test -- --watch=false
-            fi
-          else
+          if [ ! -f package.json ]; then
             echo "No frontend/package.json found. Skipping frontend tests."
+            exit 0
+          fi
+          corepack enable pnpm
+          pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: pnpm vitest run
 
   lint:
     name: Lint
@@ -78,12 +73,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '18'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.21'
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          fallback-go-version: ${{ env.FALLBACK_GO_VERSION }}
+
+      - name: Prepare pnpm
+        run: corepack enable pnpm
 
       - name: Run lint checks
         run: bash scripts/lint.sh

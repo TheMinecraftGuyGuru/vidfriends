@@ -6,7 +6,7 @@ state to the feature set described in the documentation.
 ## Infrastructure & Tooling
 - [x] Add a Makefile or task runner that wraps common workflows (tests, lint,
       database migrations) for both services.
-- [ ] Configure CI to run `go test ./...`, frontend unit tests, and linting so
+- [x] Configure CI to run `go test ./...`, frontend unit tests, and linting so
       regressions are caught automatically.
 - [ ] Provide container images or Docker Compose overrides that bundle the
       `yt-dlp` binary and seed data for local onboarding.
