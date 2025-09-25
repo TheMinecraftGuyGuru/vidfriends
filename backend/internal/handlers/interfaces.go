@@ -22,6 +22,7 @@ type SessionManager interface {
 type FriendStore interface {
 	CreateRequest(ctx context.Context, request models.FriendRequest) error
 	ListForUser(ctx context.Context, userID string) ([]models.FriendRequest, error)
+	UpdateStatus(ctx context.Context, requestID, status string) error
 }
 
 // VideoStore captures persistence for video sharing workflows.
