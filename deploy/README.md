@@ -19,18 +19,24 @@ without installing the toolchain directly on your workstation.
 
 ## Services
 
-The Compose file launches four containers. The diagram below summarizes the
-relationships and exposed ports.
+The Compose file launches five long-lived containers plus a short-lived job
+that provisions MinIO buckets. The diagram below summarizes the relationships
+and exposed ports.
 
 ```
 ┌─────────────┐        ┌──────────────┐        ┌──────────────┐
 │   frontend  │◀──────▶│   backend    │◀──────▶│     db       │
 │  (Vite dev) │ 5173   │  (Go API)    │ 8080   │ PostgreSQL   │ 5432
-└─────────────┘        └──────────────┘        └──────────────┘
-        ▲                        ▲
-        │                        │
-        │                        │
-        └──────────────┬─────────┘
+└─────────────┘        └──────▲───────┘        └──────────────┘
+        ▲                     │
+        │                     │
+        │                     │
+        │            ┌────────┴──────────┐
+        │            │      MinIO        │
+        │            │  S3 Storage 9000  │
+        │            └────────▲──────────┘
+        │                     │
+        └──────────────┬──────┘
                        │
                 ┌──────┴──────┐
                 │   yt-dlp    │
@@ -44,51 +50,66 @@ relationships and exposed ports.
   restarts.
 - **Env vars**: `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are
   sourced from `deploy/.env`.
-- **Networking**: Exposes port `5432` internally; only the backend container
-  should talk to it. If you need direct access, publish `5432:5432` locally.
+- **Networking**: Exposes port `5432` inside the Compose network; publish
+  `${POSTGRES_PORT:-5432}` to access it from the host.
 
 ### `backend`
-- **Build context**: `../backend`.
-- **Command**: Runs the Go API server (with live reload via `air` if available).
+- **Image**: `golang:1.22` running `go run ./cmd/vidfriends serve` against the
+  mounted source tree.
 - **Env vars**: Reads `DATABASE_URL`, `SESSION_SECRET`, and `YT_DLP_PATH` from
   `deploy/.env`, plus any backend-specific settings from `backend/.env`.
-- **Dependencies**: Waits for `db` to accept connections before starting. It
-  performs database migrations automatically on boot.
-- **Ports**: Publishes `8080` on the host to serve REST endpoints and websocket
-  upgrades.
+- **Dependencies**: Waits for PostgreSQL and the MinIO bucket job to complete
+  before starting. Migrations currently need to be run manually.
+- **Ports**: Publishes `${BACKEND_PORT:-8080}` on the host to serve REST
+  endpoints and websocket upgrades.
 
 ### `frontend`
-- **Build context**: `../frontend`.
-- **Command**: Runs the Vite development server so you get hot module reloads
-  during UI work.
-- **Env vars**: Loads `frontend/.env` to discover the API origin
-  (usually `http://localhost:8080`).
-- **Ports**: Publishes `5173` to the host. The dev server proxies `/api`
-  requests to the backend container.
+- **Image**: `node:20` with `pnpm` enabled via Corepack.
+- **Command**: Installs dependencies and runs the Vite development server so you
+  get hot module reloads during UI work.
+- **Env vars**: Loads `frontend/.env` to discover the API origin (usually
+  `http://localhost:8080`).
+- **Ports**: Publishes `${FRONTEND_PORT:-5173}` to the host. The dev server
+  proxies `/api` requests to the backend container.
 - **Dependencies**: Depends on the backend so routes that call the API behave as
   expected.
 
 ### `yt-dlp`
-- **Image**: Lightweight container that only ships the `yt-dlp` binary.
-- **Purpose**: Supplies the backend with a pinned version of `yt-dlp` for video
-  metadata lookups and downloading shared videos so they can be persisted for
-  playback. The binary is shared over a volume mounted at
-  `/usr/local/bin/yt-dlp` in the backend container.
+- **Image**: `ghcr.io/yt-dlp/yt-dlp:2023.11.14`.
+- **Purpose**: Copies the yt-dlp binary onto a shared volume. The backend mounts
+  that volume at `/usr/local/bin/yt-dlp` so video metadata lookups and downloads
+  use the pinned binary.
 - **Customization**: You can disable this service if you have `yt-dlp` installed
   on the host by updating `YT_DLP_PATH`.
+
+### `minio`
+- **Image**: `minio/minio:RELEASE.2024-01-13T07-53-03Z`.
+- **Purpose**: Provides S3-compatible object storage for downloaded videos and
+  thumbnails. The API listens on `${MINIO_API_PORT:-9000}` and the admin console
+  is available on `${MINIO_CONSOLE_PORT:-9001}`.
+- **Credentials**: Set `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` in
+  `deploy/.env` before starting the stack.
+
+### `createbuckets`
+- **Image**: `minio/mc:RELEASE.2024-01-11T07-46-16Z`.
+- **Purpose**: One-time job that provisions the bucket defined by
+  `VIDFRIENDS_S3_BUCKET` and makes it world-readable so videos can be streamed
+  directly from the MinIO endpoint.
+- **Restart policy**: Runs to completion and exits.
 
 ## Usage
 
 ```bash
 cd deploy
 cp .env.example .env   # fill in secrets before the first run
-docker compose up --build
+docker compose up --build --remove-orphans
 ```
 
 When the stack is running:
 
 - Visit `http://localhost:5173` for the frontend.
 - Hit the API at `http://localhost:8080`.
+- Browse stored videos at `http://localhost:9000/${VIDFRIENDS_S3_BUCKET}` or use the MinIO console at `http://localhost:9001`.
 - Connect to PostgreSQL with `psql` using the credentials defined in `.env`.
 
 Stop services with `docker compose down`. Add `-v` to wipe the database volume.
@@ -122,3 +143,4 @@ Replace the Dockerfile path and tag for the frontend image as needed.
 | Backend fails with `connection refused` | Database is still starting up | Wait a few seconds or rerun `docker compose up`.
 | Frontend can't reach the API | `VITE_API_BASE_URL` misconfigured or backend is down | Update `frontend/.env` or ensure the backend container is healthy.
 | Missing `yt-dlp` errors | Helper service disabled or binary not on PATH | Re-enable the `yt-dlp` service or set `YT_DLP_PATH` to a valid binary path. |
+| MinIO bucket missing or private | Bucket provisioning job failed or credentials changed | Re-run `docker compose run --rm createbuckets` after updating the MinIO secrets. |

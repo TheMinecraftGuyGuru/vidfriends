@@ -163,18 +163,22 @@ The repository ships with `deploy/docker-compose.yml` to orchestrate the service
 ```bash
 cd deploy
 cp .env.example .env  # if you haven't already
-# Edit .env to set secrets like DATABASE_URL, SESSION_SECRET, etc.
-docker compose up --build
+# Edit .env to set secrets like DATABASE_URL, SESSION_SECRET, and MinIO credentials.
+docker compose up --build --remove-orphans
 ```
 
 This command launches the following containers:
 
 - `db` – PostgreSQL with initialized databases and volumes for persistence.
-- `backend` – Go API service with hot-reload support (via `air`) mounting your source tree.
+- `backend` – Go API service running `go run ./cmd/vidfriends serve` with the repo mounted as a volume.
 - `frontend` – React dev server served via Vite.
-- `yt-dlp` – optional helper image that caches the `yt-dlp` binary.
+- `minio` – S3-compatible object storage that holds processed video assets.
+- `yt-dlp` – helper image that copies the `yt-dlp` binary onto a shared volume.
+- `createbuckets` – one-time MinIO client job that provisions the public bucket defined in `.env`.
 
-Wait until the logs show the API listening and migrations completing. The frontend is accessible at `http://localhost:5173` and the API at `http://localhost:8080`.
+Wait until the logs show the API listening, the bucket provisioning job exiting successfully, and PostgreSQL reporting healthy.
+The frontend is accessible at `http://localhost:5173`, the API at `http://localhost:8080`, and the object storage browser at
+`http://localhost:9001`.
 
 ### 5.2 Running commands inside containers
 
