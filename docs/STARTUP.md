@@ -21,7 +21,7 @@ Install the following software before you begin:
 | [Node.js](https://nodejs.org/en/download/) | 18 LTS | Runs the React development server and tooling. |
 | [pnpm](https://pnpm.io/installation) or [npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) | latest | Installs frontend dependencies. |
 | [PostgreSQL](https://www.postgresql.org/download/) | 14+ | Local development database. |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) | latest | CLI utility used by the backend for video metadata lookups. |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) | latest | CLI utility used by the backend for video metadata lookups and downloading shared videos for storage. |
 
 Optional but recommended:
 
@@ -147,7 +147,7 @@ By default the development server runs on `http://localhost:5173`. It proxies AP
 
 1. Visit `http://localhost:5173` and sign up for a new account.
 2. Add a friend using their username or email.
-3. Share a video link to confirm yt-dlp metadata retrieval.
+3. Share a video link to confirm yt-dlp metadata retrieval and download-to-storage workflow.
 4. Check the "Feed" tab to ensure shared videos appear.
 
 The backend logs should show API traffic and share fan-out operations, while the database should record new users, sessions, and shares.
@@ -224,7 +224,7 @@ files for typos or missing values, so start there before digging into deeper deb
 | API fails to start with `pq: password authentication failed` | Incorrect database credentials | Double-check `DATABASE_URL` and PostgreSQL role configuration. |
 | Go API exits with `dial tcp 127.0.0.1:5432: connect: connection refused` | PostgreSQL server is not running or listening on a different port | Start PostgreSQL (`brew services start postgresql` / `systemctl start postgresql`) and confirm the port matches `DATABASE_URL`. |
 | `go run ./cmd/vidfriends serve` reloads repeatedly in Docker | The source tree is mounted with root-owned files, causing `air` to fail watching | Run `sudo chown -R $(id -u):$(id -g) .` inside the repo or adjust the bind mount user in `docker-compose.yml`. |
-| `yt-dlp` errors when fetching metadata | Missing binary or rate-limiting | Install `yt-dlp` locally, or set `YT_DLP_PATH` to a bundled binary. Wait/retry if the provider is rate-limiting. |
+| `yt-dlp` errors when fetching metadata or downloading files | Missing binary, insufficient disk space, or rate-limiting | Install `yt-dlp` locally, ensure the storage volume has capacity, or set `YT_DLP_PATH` to a bundled binary. Wait/retry if the provider is rate-limiting. |
 | `pnpm install` fails with "unsupported engine" | Your Node.js runtime is older than the minimum version | Upgrade Node.js to the current LTS release (18+) and re-run `pnpm install`. |
 | CORS errors in the browser console | Frontend origin not in backend `CORS_ALLOWED_ORIGINS` | Update the backend `.env` to include the frontend dev origin. |
 | Session cookie missing in requests | Browser blocked third-party cookies or secure flag mismatch | Use the same domain/port in development and ensure `SESSION_SECURE=false` for HTTP. |

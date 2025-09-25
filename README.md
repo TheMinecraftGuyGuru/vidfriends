@@ -1,7 +1,7 @@
 # VidFriends
 
 VidFriends is a full-stack video sharing platform with a Go backend, PostgreSQL persistence, and a React + TypeScript frontend. The
-backend exposes REST endpoints for authentication, friendship management, and sharing video links with yt-dlp metadata lookups,
+backend exposes REST endpoints for authentication, friendship management, and sharing video links with yt-dlp metadata lookups and downloads so shared videos can be stored locally for playback,
 while the frontend delivers a responsive, dark-themed single-page app for managing your feed.
 
 ## Getting started
