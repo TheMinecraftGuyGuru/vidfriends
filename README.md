@@ -20,6 +20,18 @@ variables, and running the stack locally or with Docker Compose. You can also ru
 
 Refer to the individual directories for component-specific documentation.
 
+## Feature set
+
+- For You Page-style video feed that surfaces shared clips in an immersive, swipeable stream.
+- Authentication, friendship management, and sharing flows tightly integrated across the stack.
+- Responsive, dark-themed UI optimized for both desktop and mobile devices.
+
+## Roadmap
+
+- Iterate on the For You Page feed experience with richer metadata, reactions, and personalization controls.
+- Expand collaboration features, including co-watching sessions and friend recommendations.
+- Harden observability, automated testing, and deployment workflows for production readiness.
+
 ## Contributing
 
 1. Fork the repository and create a feature branch.
