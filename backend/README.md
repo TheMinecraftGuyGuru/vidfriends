@@ -14,7 +14,8 @@ startup.
 ## Running the service
 
 1. Ensure PostgreSQL is running and the connection details in `backend/.env`
-   (copy from `.env.example`) are correct. The backend expects
+   (copy from `../configs/backend.env.example` or the local `.env.example`
+   symlink) are correct. The backend expects
    `VIDFRIENDS_DATABASE_URL`, `VIDFRIENDS_PORT`, and `VIDFRIENDS_MIGRATIONS` to be
    set in the environment.
 2. Apply database migrations:

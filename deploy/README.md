@@ -11,7 +11,7 @@ without installing the toolchain directly on your workstation.
 | ---- | ------- |
 | `docker-compose.yml` | Defines the multi-service stack. |
 | `docker-compose.onboarding.yml` | Optional override that bundles `yt-dlp` and database seed data for demos. |
-| `.env.example` | Template for Compose-level environment variables shared between services. Copy it to `.env` and edit the secrets before running the stack. |
+| `.env.example` | Symlink to `../configs/deploy.env.example`, the template for Compose-level environment variables shared between services. Copy it to `.env` and edit the secrets before running the stack. |
 | `docker/` | Dockerfiles used by the CI pipeline to build multi-architecture backend and frontend images. |
 
 > **Note:** Service-specific `.env` files still live alongside the backend and

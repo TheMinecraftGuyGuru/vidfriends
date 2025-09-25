@@ -12,7 +12,7 @@ state to the feature set described in the documentation.
       `yt-dlp` binary and seed data for local onboarding.
 - [x] Replace the placeholder backend and frontend Dockerfiles with builds that
       produce runnable images for the real services.
-- [ ] Ensure local configuration templates match the documented repo layout
+- [x] Ensure local configuration templates match the documented repo layout
       (e.g. add or document the missing `configs/` directory references).
 
 ## Backend

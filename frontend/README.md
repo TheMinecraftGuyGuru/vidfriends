@@ -17,7 +17,7 @@ Install Node.js 18+ and either `pnpm` (preferred) or `npm`.
 
 1. Copy environment variables:
    ```bash
-   cp .env.example .env
+   cp ../configs/frontend.env.example .env.local
    ```
 2. Install dependencies:
    ```bash

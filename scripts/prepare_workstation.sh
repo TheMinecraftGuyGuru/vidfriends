@@ -105,9 +105,9 @@ main() {
 
   echo
   echo "== Preparing environment files =="
-  copy_env_file "$ROOT_DIR/backend/.env.example" "$ROOT_DIR/backend/.env"
-  copy_env_file "$ROOT_DIR/frontend/.env.example" "$ROOT_DIR/frontend/.env.local"
-  copy_env_file "$ROOT_DIR/deploy/.env.example" "$ROOT_DIR/deploy/.env"
+  copy_env_file "$ROOT_DIR/configs/backend.env.example" "$ROOT_DIR/backend/.env"
+  copy_env_file "$ROOT_DIR/configs/frontend.env.example" "$ROOT_DIR/frontend/.env.local"
+  copy_env_file "$ROOT_DIR/configs/deploy.env.example" "$ROOT_DIR/deploy/.env"
 
   echo
   if [[ "$errors" -gt 0 ]]; then

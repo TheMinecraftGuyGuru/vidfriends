@@ -59,9 +59,9 @@ Some of these directories are generated during development or may be moved as th
 Both the backend service and the Docker Compose deployment read configuration from environment variables. The repository includes example files that you can copy and customize:
 
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env.local
-cp deploy/.env.example deploy/.env
+cp configs/backend.env.example backend/.env
+cp configs/frontend.env.example frontend/.env.local
+cp configs/deploy.env.example deploy/.env
 ```
 
 Update the copied files with values that match your environment. At a minimum you need to provide:
