@@ -5,7 +5,8 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useReducer
+  useReducer,
+  useRef
 } from 'react';
 
 const SESSION_STORAGE_KEY = 'vidfriends.session';
@@ -162,6 +163,8 @@ interface AuthResponse {
   tokens: SessionTokens;
 }
 
+const REFRESH_LEEWAY_MS = 60_000;
+
 function ensureTokens(response: AuthResponse): SessionTokens {
   if (!response.tokens) {
     throw new Error('Authentication response was missing session tokens.');
@@ -172,6 +175,22 @@ function ensureTokens(response: AuthResponse): SessionTokens {
     refreshToken: response.tokens.refreshToken,
     refreshExpiresAt: response.tokens.refreshExpiresAt
   };
+}
+
+function toEpochMillis(timestamp: string | undefined): number | null {
+  if (!timestamp) {
+    return null;
+  }
+  const value = Date.parse(timestamp);
+  return Number.isNaN(value) ? null : value;
+}
+
+function isExpired(timestamp: string): boolean {
+  const value = toEpochMillis(timestamp);
+  if (value === null) {
+    return false;
+  }
+  return value <= Date.now();
 }
 
 export interface AuthUser {
@@ -231,6 +250,7 @@ interface AppState {
 type AppStateAction =
   | { type: 'sign-in'; payload: { user: AuthUser; tokens: SessionTokens } }
   | { type: 'sign-out' }
+  | { type: 'refresh-tokens'; payload: { tokens: SessionTokens } }
   | { type: 'add-friend'; payload: FriendConnection }
   | { type: 'add-invite'; payload: FriendInvite }
   | { type: 'resolve-invite'; payload: { inviteId: string; accepted: boolean } }
@@ -330,6 +350,10 @@ function initializeState(defaultState: AppState): AppState {
   if (!stored) {
     return defaultState;
   }
+  if (isExpired(stored.tokens.refreshExpiresAt)) {
+    clearStoredSession();
+    return defaultState;
+  }
   return {
     ...defaultState,
     auth: {
@@ -358,6 +382,14 @@ function appReducer(state: AppState, action: AppStateAction): AppState {
           user: null,
           status: 'anonymous',
           tokens: null
+        }
+      };
+    case 'refresh-tokens':
+      return {
+        ...state,
+        auth: {
+          ...state.auth,
+          tokens: action.payload.tokens
         }
       };
     case 'add-friend':
@@ -577,6 +609,81 @@ function loadFeedFromMock() {
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState, initializeState);
+  const refreshInFlight = useRef(false);
+
+  const refreshSession = useCallback(async () => {
+    if (shouldUseMockLayer()) {
+      return;
+    }
+    if (refreshInFlight.current) {
+      return;
+    }
+
+    const tokens = state.auth.tokens;
+    if (!tokens) {
+      return;
+    }
+
+    if (isExpired(tokens.refreshExpiresAt)) {
+      clearStoredSession();
+      dispatch({ type: 'sign-out' });
+      return;
+    }
+
+    refreshInFlight.current = true;
+    try {
+      const response = await postJSON<AuthResponse>('/api/v1/auth/refresh', {
+        refreshToken: tokens.refreshToken
+      });
+      const nextTokens = ensureTokens(response);
+      dispatch({ type: 'refresh-tokens', payload: { tokens: nextTokens } });
+      if (state.auth.user) {
+        persistSession({ user: state.auth.user, tokens: nextTokens });
+      } else {
+        clearStoredSession();
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearStoredSession();
+        dispatch({ type: 'sign-out' });
+      } else {
+        console.error('Failed to refresh VidFriends session', error);
+      }
+    } finally {
+      refreshInFlight.current = false;
+    }
+  }, [dispatch, state.auth.tokens, state.auth.user]);
+
+  useEffect(() => {
+    if (shouldUseMockLayer()) {
+      return;
+    }
+
+    const tokens = state.auth.tokens;
+    if (!tokens) {
+      return;
+    }
+
+    if (isExpired(tokens.refreshExpiresAt)) {
+      clearStoredSession();
+      dispatch({ type: 'sign-out' });
+      return;
+    }
+
+    const expiresAt = toEpochMillis(tokens.accessExpiresAt);
+    if (expiresAt === null) {
+      return;
+    }
+
+    const delay = Math.max(expiresAt - REFRESH_LEEWAY_MS - Date.now(), 0);
+    const timer = window.setTimeout(() => {
+      refreshSession();
+    }, delay);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [dispatch, refreshSession, state.auth.tokens]);
 
   useEffect(() => {
     let cancelled = false;
