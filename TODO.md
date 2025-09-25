@@ -30,7 +30,7 @@ state to the feature set described in the documentation.
       adjust the client to avoid broken calls.
 - [x] Expand handler and repository test coverage with database integration
       tests (using a test container or transactional rollback strategy).
-- [ ] Introduce structured logging and request-scoped context values so errors
+- [x] Introduce structured logging and request-scoped context values so errors
       surface actionable metadata.
 - [ ] Update the video ingestion pipeline to download and persist assets when
       requested instead of invoking `yt-dlp` with `--skip-download`.

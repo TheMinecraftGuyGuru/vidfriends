@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/vidfriends/backend/internal/logging"
 	"github.com/vidfriends/backend/internal/models"
 	"github.com/vidfriends/backend/internal/repositories"
 )
@@ -32,14 +33,19 @@ func (h FriendHandler) Invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+	logger := logging.FromContext(ctx)
+
 	if h.Friends == nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "friend service unavailable"})
+		logger.Error("friend service unavailable")
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "friend service unavailable"})
 		return
 	}
 
 	var req inviteFriendRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		logger.Warn("invalid invite payload", "error", err)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
@@ -47,12 +53,14 @@ func (h FriendHandler) Invite(w http.ResponseWriter, r *http.Request) {
 	req.ReceiverID = strings.TrimSpace(req.ReceiverID)
 
 	if req.RequesterID == "" || req.ReceiverID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requesterId and receiverId are required"})
+		logger.Warn("invite missing participants", "requesterId", req.RequesterID, "receiverId", req.ReceiverID)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "requesterId and receiverId are required"})
 		return
 	}
 
 	if req.RequesterID == req.ReceiverID {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot invite yourself"})
+		logger.Warn("invite attempted self", "userId", req.RequesterID)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "cannot invite yourself"})
 		return
 	}
 
@@ -65,19 +73,22 @@ func (h FriendHandler) Invite(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 	}
 
-	if err := h.Friends.CreateRequest(r.Context(), friendReq); err != nil {
+	if err := h.Friends.CreateRequest(ctx, friendReq); err != nil {
 		switch {
 		case errors.Is(err, repositories.ErrConflict):
-			respondJSON(w, http.StatusConflict, map[string]string{"error": "friend request already exists"})
+			logger.Warn("friend request already exists", "requesterId", req.RequesterID, "receiverId", req.ReceiverID)
+			respondJSON(ctx, w, http.StatusConflict, map[string]string{"error": "friend request already exists"})
 		case errors.Is(err, repositories.ErrNotFound):
-			respondJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+			logger.Warn("friend invite target missing", "requesterId", req.RequesterID, "receiverId", req.ReceiverID)
+			respondJSON(ctx, w, http.StatusNotFound, map[string]string{"error": "user not found"})
 		default:
-			respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create friend request"})
+			logger.Error("failed to create friend request", "error", err, "requesterId", req.RequesterID, "receiverId", req.ReceiverID)
+			respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "failed to create friend request"})
 		}
 		return
 	}
 
-	respondJSON(w, http.StatusCreated, friendRequestResponse{Request: friendReq})
+	respondJSON(ctx, w, http.StatusCreated, friendRequestResponse{Request: friendReq})
 }
 
 // List handles GET /api/v1/friends requests.
@@ -87,24 +98,30 @@ func (h FriendHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+	logger := logging.FromContext(ctx)
+
 	if h.Friends == nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "friend service unavailable"})
+		logger.Error("friend service unavailable")
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "friend service unavailable"})
 		return
 	}
 
 	userID := strings.TrimSpace(r.URL.Query().Get("user"))
 	if userID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "user query parameter is required"})
+		logger.Warn("list friends missing user id")
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "user query parameter is required"})
 		return
 	}
 
-	requests, err := h.Friends.ListForUser(r.Context(), userID)
+	requests, err := h.Friends.ListForUser(ctx, userID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list friend requests"})
+		logger.Error("failed to list friend requests", "error", err, "userId", userID)
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "failed to list friend requests"})
 		return
 	}
 
-	respondJSON(w, http.StatusOK, listFriendsResponse{Requests: requests})
+	respondJSON(ctx, w, http.StatusOK, listFriendsResponse{Requests: requests})
 }
 
 // Respond handles POST /api/v1/friends/respond requests to accept or block invites.
@@ -114,21 +131,27 @@ func (h FriendHandler) Respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+	logger := logging.FromContext(ctx)
+
 	if h.Friends == nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "friend service unavailable"})
+		logger.Error("friend service unavailable")
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "friend service unavailable"})
 		return
 	}
 
 	var req respondFriendRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		logger.Warn("invalid respond payload", "error", err)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
 	req.RequestID = strings.TrimSpace(req.RequestID)
 	action := strings.ToLower(strings.TrimSpace(req.Action))
 	if req.RequestID == "" || action == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "requestId and action are required"})
+		logger.Warn("respond missing fields", "requestId", req.RequestID, "action", action)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "requestId and action are required"})
 		return
 	}
 
@@ -139,20 +162,23 @@ func (h FriendHandler) Respond(w http.ResponseWriter, r *http.Request) {
 	case "block":
 		status = friendStatusBlocked
 	default:
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "action must be accept or block"})
+		logger.Warn("invalid respond action", "action", action)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "action must be accept or block"})
 		return
 	}
 
-	if err := h.Friends.UpdateStatus(r.Context(), req.RequestID, status); err != nil {
+	if err := h.Friends.UpdateStatus(ctx, req.RequestID, status); err != nil {
 		if errors.Is(err, repositories.ErrNotFound) {
-			respondJSON(w, http.StatusNotFound, map[string]string{"error": "friend request not found"})
+			logger.Warn("friend request not found", "requestId", req.RequestID)
+			respondJSON(ctx, w, http.StatusNotFound, map[string]string{"error": "friend request not found"})
 			return
 		}
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update friend request"})
+		logger.Error("failed to update friend request", "error", err, "requestId", req.RequestID, "status", status)
+		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "failed to update friend request"})
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]string{
+	respondJSON(ctx, w, http.StatusOK, map[string]string{
 		"requestId": req.RequestID,
 		"status":    status,
 	})
