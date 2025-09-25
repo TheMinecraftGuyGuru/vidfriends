@@ -45,7 +45,7 @@ state to the feature set described in the documentation.
       and add optimistic update rollbacks when the API rejects changes.
 - [x] Persist and refresh authentication tokens by calling the backend
       `/api/v1/auth/refresh` endpoint before the access token expires.
-- [ ] Implement a share-video form that calls the backend and handles metadata
+- [x] Implement a share-video form that calls the backend and handles metadata
       lookup latency states.
 - [ ] Add Vitest/RTL coverage for the dashboard widgets, auth forms, and state
       reducer logic.

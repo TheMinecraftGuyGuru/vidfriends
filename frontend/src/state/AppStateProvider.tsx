@@ -502,7 +502,7 @@ export interface AppStateContextValue extends AppState {
   acceptInvite: (inviteId: string) => void;
   declineInvite: (inviteId: string) => void;
   respondToInvite: (inviteId: string, accepted: boolean) => Promise<void>;
-  shareVideo: (entry: { title: string; url?: string }) => void;
+  shareVideo: (entry: { title: string; url?: string }) => Promise<FeedEntry>;
   reactToVideo: (entryId: string, reaction: ReactionType) => void;
 }
 
@@ -859,30 +859,86 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   const shareVideo = useCallback<AppStateContextValue['shareVideo']>(
-    (entry) => {
-      const title = entry.title.trim() || 'Untitled share';
-      const fallbackTags = deriveTagsFromTitle(title);
-      dispatch({
-        type: 'share-video',
-        payload: {
-          id: `feed-${Date.now()}`,
-          title,
-          sharedBy: state.auth.user?.displayName ?? 'Anonymous friend',
-          sharedAt: new Date().toISOString(),
-          platform: inferPlatformFromUrl(entry.url),
-          url: entry.url ?? '#',
-          thumbnailUrl: generateThumbnailForTitle(title),
-          channelName: `${state.auth.user?.displayName ?? 'A VidFriend'}'s pick`,
+    async (entry) => {
+      const sanitizedUrl = entry.url?.trim();
+      if (!sanitizedUrl) {
+        throw new Error('Please provide a valid video URL to share.');
+      }
+
+      const providedTitle = entry.title.trim();
+      const ownerDisplayName = state.auth.user?.displayName ?? 'Anonymous friend';
+      const fallbackTitle = providedTitle.length > 0 ? providedTitle : 'Shared video';
+
+      const buildFeedEntry = (raw: {
+        id: string;
+        url: string;
+        title?: string | null;
+        description?: string | null;
+        thumbnail?: string | null;
+        createdAt?: string;
+      }): FeedEntry => {
+        const resolvedTitle = raw.title && raw.title.trim().length > 0 ? raw.title : fallbackTitle;
+        return {
+          id: raw.id,
+          title: resolvedTitle,
+          sharedBy: ownerDisplayName,
+          sharedAt: raw.createdAt ?? new Date().toISOString(),
+          platform: inferPlatformFromUrl(raw.url),
+          url: raw.url,
+          thumbnailUrl: raw.thumbnail ?? generateThumbnailForTitle(resolvedTitle),
+          channelName: `${ownerDisplayName}'s share`,
           durationSeconds: generateDurationForShare(),
           viewCount: generateViewCount(),
-          description: `Shared by ${state.auth.user?.displayName ?? 'a friend'}: ${title}.`,
-          tags: fallbackTags,
+          description: raw.description ?? `Shared by ${ownerDisplayName}: ${resolvedTitle}.`,
+          tags: deriveTagsFromTitle(resolvedTitle),
           reactions: { like: 0, love: 0, wow: 0, laugh: 0 },
           userReaction: null
+        } satisfies FeedEntry;
+      };
+
+      if (shouldUseMockLayer()) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        const mockEntry = buildFeedEntry({
+          id: `feed-${Date.now()}`,
+          url: sanitizedUrl,
+          title: fallbackTitle,
+          description: `Shared by ${ownerDisplayName}: ${fallbackTitle}.`
+        });
+        dispatch({ type: 'share-video', payload: mockEntry });
+        return mockEntry;
+      }
+
+      const ownerId = state.auth.user?.id;
+      if (!ownerId) {
+        throw new Error('You need to be signed in to share a video.');
+      }
+
+      let response: { share: RawVideoShare };
+      try {
+        response = await postJSON<{ share: RawVideoShare }>('/api/v1/videos', {
+          ownerId,
+          url: sanitizedUrl
+        });
+      } catch (error) {
+        if (error instanceof Error) {
+          throw error;
         }
+        throw new Error('Unable to share this video right now. Please try again.');
+      }
+
+      const { share } = response;
+      const persistedEntry = buildFeedEntry({
+        id: share.ID,
+        url: share.URL,
+        title: share.Title,
+        description: share.Description,
+        thumbnail: share.Thumbnail ?? undefined,
+        createdAt: share.CreatedAt
       });
+      dispatch({ type: 'share-video', payload: persistedEntry });
+      return persistedEntry;
     },
-    [state.auth.user?.displayName]
+    [state.auth.user?.displayName, state.auth.user?.id]
   );
 
   const reactToVideo = useCallback<AppStateContextValue['reactToVideo']>(

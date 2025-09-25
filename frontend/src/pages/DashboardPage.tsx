@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { useAppState } from '../state/useAppState';
 import { FriendListManager } from './components/FriendListManager';
+import { ShareVideoForm } from './components/ShareVideoForm';
 import { VideoFeedPanel } from './components/VideoFeedPanel';
 
 export function DashboardPage() {
@@ -22,6 +23,8 @@ export function DashboardPage() {
           Track friend activity, respond to invitations, and explore what your circle is watching.
         </p>
       </header>
+
+      <ShareVideoForm />
 
       <div
         style={{
