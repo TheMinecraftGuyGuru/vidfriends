@@ -26,7 +26,7 @@ state to the feature set described in the documentation.
       that respect a viewer's friendships.
 - [x] Instantiate concrete service dependencies in the HTTP server so handlers
       no longer return "service unavailable" for every request.
-- [ ] Add password reset endpoints to match the frontend's expectations or
+- [x] Add password reset endpoints to match the frontend's expectations or
       adjust the client to avoid broken calls.
 - [ ] Expand handler and repository test coverage with database integration
       tests (using a test container or transactional rollback strategy).
