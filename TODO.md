@@ -24,7 +24,7 @@ state to the feature set described in the documentation.
       actually runs migrations using the configured database URL.
 - [x] Implement the `/api/v1/videos/feed` endpoint backed by repository queries
       that respect a viewer's friendships.
-- [ ] Instantiate concrete service dependencies in the HTTP server so handlers
+- [x] Instantiate concrete service dependencies in the HTTP server so handlers
       no longer return "service unavailable" for every request.
 - [ ] Add password reset endpoints to match the frontend's expectations or
       adjust the client to avoid broken calls.
