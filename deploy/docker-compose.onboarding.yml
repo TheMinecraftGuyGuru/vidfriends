@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  yt-dlp:
+    build:
+      context: ..
+      dockerfile: deploy/docker/onboarding-assets.Dockerfile
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      set -eu && \
+      mkdir -p /export/bin /export/seeds && \
+      cp /usr/local/bin/yt-dlp /export/bin/yt-dlp && chmod +x /export/bin/yt-dlp && \
+      cp /app/seeds/dev_seed.sql /export/seeds/dev_seed.sql && \
+      rm -rf /export/seeds/migrations && \
+      cp -r /app/migrations /export/seeds/migrations
+    restart: "no"
+    volumes:
+      - yt-dlp-bin:/export/bin
+      - seed-data:/export/seeds
+
+  db-seed:
+    image: postgres:15
+    depends_on:
+      db:
+        condition: service_healthy
+      yt-dlp:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      set -eu && \
+      for file in $(find /seed-data/migrations -maxdepth 1 -type f -name '*.sql' | sort); do \
+        echo "Applying $$file"; \
+        psql -h db -U ${POSTGRES_USER} -d ${POSTGRES_DB} -f "$$file"; \
+      done && \
+      psql -h db -U ${POSTGRES_USER} -d ${POSTGRES_DB} -f /seed-data/dev_seed.sql
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - seed-data:/seed-data:ro
+    restart: "no"
+
+  backend:
+    depends_on:
+      db:
+        condition: service_healthy
+      db-seed:
+        condition: service_completed_successfully
+      createbuckets:
+        condition: service_completed_successfully
+    environment:
+      VIDFRIENDS_YTDLP_PATH: /usr/local/bin/yt-dlp
+
+volumes:
+  seed-data:

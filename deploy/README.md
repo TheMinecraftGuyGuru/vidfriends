@@ -10,6 +10,7 @@ without installing the toolchain directly on your workstation.
 | File | Purpose |
 | ---- | ------- |
 | `docker-compose.yml` | Defines the multi-service stack. |
+| `docker-compose.onboarding.yml` | Optional override that bundles `yt-dlp` and database seed data for demos. |
 | `.env.example` | Template for Compose-level environment variables shared between services. Copy it to `.env` and edit the secrets before running the stack. |
 | `docker/` | Dockerfiles used by the CI pipeline to build multi-architecture backend and frontend images. |
 
@@ -75,10 +76,12 @@ and exposed ports.
   expected.
 
 ### `yt-dlp`
-- **Image**: `ghcr.io/yt-dlp/yt-dlp:2023.11.14`.
+- **Image**: `ghcr.io/yt-dlp/yt-dlp:2023.11.14` by default (overridden to a
+  custom build when the onboarding profile is enabled).
 - **Purpose**: Copies the yt-dlp binary onto a shared volume. The backend mounts
   that volume at `/usr/local/bin/yt-dlp` so video metadata lookups and downloads
-  use the pinned binary.
+  use the pinned binary. Under the onboarding override, the helper image also
+  publishes SQL migrations and seed data for the database bootstrap job.
 - **Customization**: You can disable this service if you have `yt-dlp` installed
   on the host by updating `YT_DLP_PATH`.
 
@@ -104,6 +107,20 @@ cd deploy
 cp .env.example .env   # fill in secrets before the first run
 docker compose up --build --remove-orphans
 ```
+
+Need a turnkey demo database and bundled `yt-dlp` binary? Combine the base file
+with the onboarding override:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.onboarding.yml \
+  up --build --remove-orphans
+```
+
+The override swaps in an assets helper image that publishes the pinned
+`yt-dlp` executable to the shared volume, applies SQL migrations, and seeds the
+database before the backend starts accepting requests.
 
 When the stack is running:
 
