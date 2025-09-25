@@ -6,7 +6,8 @@ while the frontend delivers a responsive, dark-themed single-page app for managi
 
 ## Getting started
 
-Use the [Startup Guide](docs/STARTUP.md) for detailed instructions on installing prerequisites, configuring environment
+Start with the [First Steps checklist](docs/FIRST_STEPS.md) to orient yourself, then use the
+[Startup Guide](docs/STARTUP.md) for detailed instructions on installing prerequisites, configuring environment
 variables, and running the stack locally or with Docker Compose.
 
 ## Project structure
