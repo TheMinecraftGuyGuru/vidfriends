@@ -41,7 +41,7 @@ state to the feature set described in the documentation.
 - [x] Replace the hard-coded mock data in `AppStateProvider` with real API calls
       for friends, feed entries, and invitations. Provide a mock layer that can
       be toggled for offline development.
-- [ ] Align friend invitation mutation URLs with the backend (`/api/v1/friends/respond`)
+- [x] Align friend invitation mutation URLs with the backend (`/api/v1/friends/respond`)
       and add optimistic update rollbacks when the API rejects changes.
 - [ ] Persist and refresh authentication tokens by calling the backend
       `/api/v1/auth/refresh` endpoint before the access token expires.
