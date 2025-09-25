@@ -28,7 +28,7 @@ state to the feature set described in the documentation.
       no longer return "service unavailable" for every request.
 - [x] Add password reset endpoints to match the frontend's expectations or
       adjust the client to avoid broken calls.
-- [ ] Expand handler and repository test coverage with database integration
+- [x] Expand handler and repository test coverage with database integration
       tests (using a test container or transactional rollback strategy).
 - [ ] Introduce structured logging and request-scoped context values so errors
       surface actionable metadata.
