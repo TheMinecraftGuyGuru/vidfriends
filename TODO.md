@@ -22,6 +22,6 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 - [x] Add frontend unit and integration tests covering critical user journeys.
 
 ## Documentation
-- [ ] Expand `docs/STARTUP.md` with troubleshooting tips for common setup issues.
+- [x] Expand `docs/STARTUP.md` with troubleshooting tips for common setup issues.
 - [ ] Document coding standards and linting/prettier configurations for both backend and frontend.
 - [ ] Create contributor guides for running migrations, seeding data, and executing the full test suite locally.

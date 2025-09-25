@@ -216,13 +216,40 @@ These commands ensure the Go API, React frontend, and TypeScript sources compile
 
 ## 7. Troubleshooting
 
+The matrix below captures the issues we see most often and how to recover from them. Many fixes involve re-reading the `.env`
+files for typos or missing values, so start there before digging into deeper debugging.
+
 | Symptom | Likely cause | Suggested fix |
 | ------- | ------------ | ------------- |
 | API fails to start with `pq: password authentication failed` | Incorrect database credentials | Double-check `DATABASE_URL` and PostgreSQL role configuration. |
+| Go API exits with `dial tcp 127.0.0.1:5432: connect: connection refused` | PostgreSQL server is not running or listening on a different port | Start PostgreSQL (`brew services start postgresql` / `systemctl start postgresql`) and confirm the port matches `DATABASE_URL`. |
+| `go run ./cmd/vidfriends serve` reloads repeatedly in Docker | The source tree is mounted with root-owned files, causing `air` to fail watching | Run `sudo chown -R $(id -u):$(id -g) .` inside the repo or adjust the bind mount user in `docker-compose.yml`. |
 | `yt-dlp` errors when fetching metadata | Missing binary or rate-limiting | Install `yt-dlp` locally, or set `YT_DLP_PATH` to a bundled binary. Wait/retry if the provider is rate-limiting. |
+| `pnpm install` fails with "unsupported engine" | Your Node.js runtime is older than the minimum version | Upgrade Node.js to the current LTS release (18+) and re-run `pnpm install`. |
 | CORS errors in the browser console | Frontend origin not in backend `CORS_ALLOWED_ORIGINS` | Update the backend `.env` to include the frontend dev origin. |
 | Session cookie missing in requests | Browser blocked third-party cookies or secure flag mismatch | Use the same domain/port in development and ensure `SESSION_SECURE=false` for HTTP. |
+| Frontend shows blank screen with Vite `ERR_NETWORK` errors | `VITE_API_BASE_URL` points to the wrong host/port | Confirm the API is reachable from the browser and update `frontend/.env.local` (for Docker ensure you use the host machine IP). |
 | `docker compose up` exits immediately | Ports already in use | Stop conflicting services or change the exposed ports in the compose file. |
+
+### 7.1 Logs and diagnostics
+
+- **Backend logs:** Run `go run ./cmd/vidfriends serve --log-level debug` (or `docker compose logs -f backend`) to view detailed
+  request traces and configuration warnings.
+- **Database connectivity:** `psql $DATABASE_URL -c '\dt'` verifies the service can reach PostgreSQL and that migrations have
+  been applied.
+- **Frontend diagnostics:** Open the browser dev tools console and network tab to confirm the API responses and CORS headers
+  match your expectations.
+- **Docker environment:** `docker compose ps` shows container status, and `docker compose exec backend env` can be used to
+  inspect environment variables inside the running service.
+
+### 7.2 When all else fails
+
+- Rebuild containers without cache: `docker compose build --no-cache` followed by `docker compose up`.
+- Remove dangling volumes when schema drift causes migration failures: `docker compose down -v` (this wipes the local
+  database).
+- Delete and recreate `.env` files from the provided `.example` templates to ensure no stale keys remain.
+- Ask for help in the project chat with the exact command, full log output, and details about your OS, CPU, and tooling
+  versions.
 
 ---
 
