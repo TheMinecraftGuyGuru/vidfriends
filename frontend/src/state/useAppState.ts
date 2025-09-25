@@ -14,6 +14,7 @@ export function useAppState() {
       signUp: context.signUp,
       signOut: context.signOut,
       shareVideo: context.shareVideo,
+      reactToVideo: context.reactToVideo,
       acceptInvite: context.acceptInvite,
       declineInvite: context.declineInvite,
       respondToInvite: context.respondToInvite,
