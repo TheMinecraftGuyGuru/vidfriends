@@ -247,7 +247,7 @@ interface AppState {
   };
 }
 
-type AppStateAction =
+export type AppStateAction =
   | { type: 'sign-in'; payload: { user: AuthUser; tokens: SessionTokens } }
   | { type: 'sign-out' }
   | { type: 'refresh-tokens'; payload: { tokens: SessionTokens } }
@@ -364,7 +364,7 @@ function initializeState(defaultState: AppState): AppState {
   };
 }
 
-function appReducer(state: AppState, action: AppStateAction): AppState {
+export function appReducer(state: AppState, action: AppStateAction): AppState {
   switch (action.type) {
     case 'sign-in':
       return {
