@@ -16,9 +16,11 @@ project for collaborative development.
 
 1. Clone the repository and create a personal fork if you plan to open pull requests.
 2. Follow the [Startup Guide](STARTUP.md) to install Go, Node.js, pnpm or npm,
-   PostgreSQL, and Docker (if you will use the container workflow).
-3. Copy the sample environment files (`backend/.env.example`, `frontend/.env.example`,
-   and `deploy/.env.example`) and edit them with secrets that match your local
+   PostgreSQL, and Docker (if you will use the container workflow). Run
+   `./scripts/prepare_workstation.sh` to verify minimum tool versions and copy
+   example environment files automatically.
+3. Review the generated `.env` files (`backend/.env`, `frontend/.env.local`,
+   and `deploy/.env`) and edit them with secrets that match your local
    environment.
 
 ## 3. Run the stack locally

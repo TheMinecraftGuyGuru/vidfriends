@@ -1,0 +1,30 @@
+# Environment files
+.env
+.env.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+frontend/.env.test
+deploy/.env
+deploy/.env.local
+
+# Node.js dependencies and build output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Go build artifacts
+backend/bin/
+backend/tmp/
+*.out
+*.log
+
+# Editor and OS-specific files
+.DS_Store
+.idea/
+.vscode/
+*.swp

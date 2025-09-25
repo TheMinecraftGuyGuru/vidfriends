@@ -8,7 +8,8 @@ while the frontend delivers a responsive, dark-themed single-page app for managi
 
 Start with the [First Steps checklist](docs/FIRST_STEPS.md) to orient yourself, then use the
 [Startup Guide](docs/STARTUP.md) for detailed instructions on installing prerequisites, configuring environment
-variables, and running the stack locally or with Docker Compose.
+variables, and running the stack locally or with Docker Compose. You can also run
+`./scripts/prepare_workstation.sh` to validate tool versions and create `.env` files from their templates.
 
 ## Project structure
 
