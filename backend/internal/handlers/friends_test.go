@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -53,6 +54,27 @@ func (s *inMemoryFriendStore) UpdateStatus(_ context.Context, requestID, status 
 	return nil
 }
 
+type stubFriendStore struct {
+	createErr error
+	listErr   error
+	updateErr error
+}
+
+func (s *stubFriendStore) CreateRequest(context.Context, models.FriendRequest) error {
+	return s.createErr
+}
+
+func (s *stubFriendStore) ListForUser(context.Context, string) ([]models.FriendRequest, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return []models.FriendRequest{{ID: "req-1"}}, nil
+}
+
+func (s *stubFriendStore) UpdateStatus(context.Context, string, string) error {
+	return s.updateErr
+}
+
 func TestFriendHandlerInvite(t *testing.T) {
 	store := newInMemoryFriendStore()
 	now := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -90,6 +112,40 @@ func TestFriendHandlerInvite(t *testing.T) {
 	}
 }
 
+func TestFriendHandlerInviteFailures(t *testing.T) {
+	body := []byte(`{"requesterId":"user-1","receiverId":"user-2"}`)
+
+	cases := []struct {
+		name       string
+		handler    FriendHandler
+		method     string
+		body       []byte
+		wantStatus int
+	}{
+		{"wrongMethod", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodGet, body, http.StatusMethodNotAllowed},
+		{"missingStore", FriendHandler{}, http.MethodPost, body, http.StatusInternalServerError},
+		{"badJSON", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte("{"), http.StatusBadRequest},
+		{"missingFields", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte(`{"requesterId":"","receiverId":""}`), http.StatusBadRequest},
+		{"selfInvite", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte(`{"requesterId":"same","receiverId":"same"}`), http.StatusBadRequest},
+		{"conflict", FriendHandler{Friends: &stubFriendStore{createErr: repositories.ErrConflict}}, http.MethodPost, body, http.StatusConflict},
+		{"notFound", FriendHandler{Friends: &stubFriendStore{createErr: repositories.ErrNotFound}}, http.MethodPost, body, http.StatusNotFound},
+		{"internal", FriendHandler{Friends: &stubFriendStore{createErr: errors.New("boom")}}, http.MethodPost, body, http.StatusInternalServerError},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, "/api/v1/friends/invite", bytes.NewReader(tc.body))
+			rec := httptest.NewRecorder()
+
+			tc.handler.Invite(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("expected status %d got %d", tc.wantStatus, rec.Code)
+			}
+		})
+	}
+}
+
 func TestFriendHandlerList(t *testing.T) {
 	store := newInMemoryFriendStore()
 	store.requests["req-1"] = models.FriendRequest{ID: "req-1", Requester: "user-1", Receiver: "user-2", Status: friendStatusPending}
@@ -111,6 +167,39 @@ func TestFriendHandlerList(t *testing.T) {
 
 	if len(resp.Requests) != 1 || resp.Requests[0].ID != "req-1" {
 		t.Fatalf("unexpected response payload: %+v", resp)
+	}
+}
+
+func TestFriendHandlerListFailures(t *testing.T) {
+	handler := FriendHandler{Friends: &stubFriendStore{listErr: errors.New("db down")}}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/friends", nil)
+	rec := httptest.NewRecorder()
+	handler.List(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected method not allowed got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/friends", nil)
+	rec = httptest.NewRecorder()
+	handler.List(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/friends?user=user-1", nil)
+	rec = httptest.NewRecorder()
+	handler = FriendHandler{}
+	handler.List(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected internal error got %d", rec.Code)
+	}
+
+	handler = FriendHandler{Friends: &stubFriendStore{listErr: errors.New("db down")}}
+	rec = httptest.NewRecorder()
+	handler.List(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected internal error got %d", rec.Code)
 	}
 }
 
@@ -140,5 +229,63 @@ func TestFriendHandlerRespond(t *testing.T) {
 
 	if updated.RespondedAt == nil {
 		t.Fatalf("expected respondedAt to be set")
+	}
+}
+
+func TestFriendHandlerRespondFailures(t *testing.T) {
+	handler := FriendHandler{Friends: &stubFriendStore{updateErr: repositories.ErrNotFound}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/friends/respond", nil)
+	rec := httptest.NewRecorder()
+	handler.Respond(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected method not allowed got %d", rec.Code)
+	}
+
+	handler = FriendHandler{}
+	body := []byte(`{"requestId":"req-1","action":"accept"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/friends/respond", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.Respond(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected internal error got %d", rec.Code)
+	}
+
+	handler = FriendHandler{Friends: &stubFriendStore{}}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/friends/respond", bytes.NewReader([]byte("{")))
+	rec = httptest.NewRecorder()
+	handler.Respond(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/friends/respond", bytes.NewReader([]byte(`{"requestId":"","action":""}`)))
+	rec = httptest.NewRecorder()
+	handler.Respond(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/friends/respond", bytes.NewReader([]byte(`{"requestId":"req-1","action":"maybe"}`)))
+	rec = httptest.NewRecorder()
+	handler.Respond(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request got %d", rec.Code)
+	}
+
+	handler = FriendHandler{Friends: &stubFriendStore{updateErr: repositories.ErrNotFound}}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/friends/respond", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.Respond(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected not found got %d", rec.Code)
+	}
+
+	handler = FriendHandler{Friends: &stubFriendStore{updateErr: errors.New("db down")}}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/friends/respond", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.Respond(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected internal error got %d", rec.Code)
 	}
 }

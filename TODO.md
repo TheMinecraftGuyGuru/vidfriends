@@ -12,7 +12,7 @@ A living checklist of follow-up work and enhancements to guide ongoing developme
 - [x] Implement authentication endpoints, including session management and token refresh.
 - [x] Add friend management APIs (invite, accept, block) with appropriate database migrations.
 - [x] Integrate yt-dlp metadata lookups for shared video links and cache results.
-- [ ] Write comprehensive Go tests for handlers, repositories, and domain logic.
+- [x] Write comprehensive Go tests for handlers, repositories, and domain logic.
 
 ## Frontend
 - [ ] Scaffold the React + TypeScript application under `frontend/` with routing and global state management.
