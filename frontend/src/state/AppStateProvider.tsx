@@ -3,12 +3,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer
 } from 'react';
 
 const SESSION_STORAGE_KEY = 'vidfriends.session';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const USE_MOCK_DATA = String(import.meta.env.VITE_USE_MOCK_DATA ?? '').toLowerCase() === 'true';
 
 class ApiError extends Error {
   status: number;
@@ -47,6 +49,30 @@ function buildURL(path: string): string {
     return `${API_BASE_URL}/${path}`;
   }
   return `${API_BASE_URL}${path}`;
+}
+
+async function getJSON<T>(path: string, tokens: SessionTokens | null): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(buildURL(path), {
+      method: 'GET',
+      headers: tokens?.accessToken
+        ? {
+            Authorization: `Bearer ${tokens.accessToken}`
+          }
+        : undefined
+    });
+  } catch {
+    throw new Error('Unable to connect to VidFriends services. Please try again.');
+  }
+
+  const payload = await parseJSON(response);
+  if (!response.ok) {
+    const message = getErrorMessage(payload) ?? `Request failed with status ${response.status}`;
+    throw new ApiError(message, response.status);
+  }
+
+  return (payload as T) ?? (undefined as T);
 }
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
@@ -210,80 +236,94 @@ type AppStateAction =
   | { type: 'resolve-invite'; payload: { inviteId: string; accepted: boolean } }
   | { type: 'remove-friend'; payload: { friendId: string } }
   | { type: 'share-video'; payload: FeedEntry }
-  | { type: 'react-to-video'; payload: { entryId: string; reaction: ReactionType } };
+  | { type: 'react-to-video'; payload: { entryId: string; reaction: ReactionType } }
+  | {
+      type: 'set-friends';
+      payload: { pending: FriendInvite[]; connections: FriendConnection[] };
+    }
+  | { type: 'set-feed'; payload: FeedEntry[] };
 
-const initialState: AppState = {
+const mockFriendsState: { pending: FriendInvite[]; connections: FriendConnection[] } = {
+  pending: [
+    { id: 'inv-1', displayName: 'Sasha Rivers', mutualFriends: 4 },
+    { id: 'inv-2', displayName: 'Miguel Chen', mutualFriends: 2 }
+  ],
+  connections: [
+    { id: 'friend-1', displayName: 'Rowan Carter', status: 'online' },
+    { id: 'friend-2', displayName: 'Priya Das', status: 'away' }
+  ]
+};
+
+const mockFeedEntries: FeedEntry[] = [
+  {
+    id: 'feed-1',
+    title: 'Top 10 Cozy Indie Games',
+    sharedBy: 'Rowan Carter',
+    sharedAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
+    platform: 'YouTube',
+    url: 'https://www.youtube.com/watch?v=I6-hm4DYPwU',
+    thumbnailUrl: 'https://i.ytimg.com/vi/I6-hm4DYPwU/hqdefault.jpg',
+    channelName: 'Indie Realm',
+    durationSeconds: 972,
+    viewCount: 48200,
+    description:
+      'Discover new cozy titles perfect for winding down after a long day. This curated list covers hidden gems, heartfelt stories, and soundtracks you will want on repeat.',
+    tags: ['Games', 'Cozy', 'Indie'],
+    reactions: { like: 18, love: 6, wow: 2, laugh: 1 },
+    userReaction: null
+  },
+  {
+    id: 'feed-2',
+    title: 'Morning Flow Yoga for Beginners',
+    sharedBy: 'Priya Das',
+    sharedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    platform: 'YouTube',
+    url: 'https://www.youtube.com/watch?v=u5o593sW9DQ',
+    thumbnailUrl: 'https://i.ytimg.com/vi/u5o593sW9DQ/hqdefault.jpg',
+    channelName: 'Peaceful Moves',
+    durationSeconds: 1803,
+    viewCount: 91500,
+    description:
+      'A gentle yoga flow designed to wake up the body and focus the mind. No equipment required—perfect for easing into the day.',
+    tags: ['Wellness', 'Mindfulness', 'Beginner Friendly'],
+    reactions: { like: 12, love: 9, wow: 1, laugh: 0 },
+    userReaction: 'love'
+  },
+  {
+    id: 'feed-3',
+    title: 'How the JWST Sees the Universe',
+    sharedBy: 'Miguel Chen',
+    sharedAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
+    platform: 'Nebula',
+    url: 'https://nebula.tv/videos/space-jwst',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1200&q=80',
+    channelName: 'Cosmic Perspectives',
+    durationSeconds: 1245,
+    viewCount: 38700,
+    description:
+      'Astrophysicist Dr. Mei Park breaks down the science behind the James Webb Space Telescope and what its discoveries mean for our understanding of deep space.',
+    tags: ['Science', 'Space', 'Documentary'],
+    reactions: { like: 21, love: 11, wow: 7, laugh: 0 },
+    userReaction: null
+  }
+];
+
+const emptyAppState: AppState = {
   auth: {
     user: null,
     status: 'anonymous',
     tokens: null
   },
   friends: {
-    pending: [
-      { id: 'inv-1', displayName: 'Sasha Rivers', mutualFriends: 4 },
-      { id: 'inv-2', displayName: 'Miguel Chen', mutualFriends: 2 }
-    ],
-    connections: [
-      { id: 'friend-1', displayName: 'Rowan Carter', status: 'online' },
-      { id: 'friend-2', displayName: 'Priya Das', status: 'away' }
-    ]
+    pending: [],
+    connections: []
   },
   feed: {
-    entries: [
-      {
-        id: 'feed-1',
-        title: 'Top 10 Cozy Indie Games',
-        sharedBy: 'Rowan Carter',
-        sharedAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-        platform: 'YouTube',
-        url: 'https://www.youtube.com/watch?v=I6-hm4DYPwU',
-        thumbnailUrl: 'https://i.ytimg.com/vi/I6-hm4DYPwU/hqdefault.jpg',
-        channelName: 'Indie Realm',
-        durationSeconds: 972,
-        viewCount: 48200,
-        description:
-          'Discover new cozy titles perfect for winding down after a long day. This curated list covers hidden gems, heartfelt stories, and soundtracks you will want on repeat.',
-        tags: ['Games', 'Cozy', 'Indie'],
-        reactions: { like: 18, love: 6, wow: 2, laugh: 1 },
-        userReaction: null
-      },
-      {
-        id: 'feed-2',
-        title: 'Morning Flow Yoga for Beginners',
-        sharedBy: 'Priya Das',
-        sharedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-        platform: 'YouTube',
-        url: 'https://www.youtube.com/watch?v=u5o593sW9DQ',
-        thumbnailUrl: 'https://i.ytimg.com/vi/u5o593sW9DQ/hqdefault.jpg',
-        channelName: 'Peaceful Moves',
-        durationSeconds: 1803,
-        viewCount: 91500,
-        description:
-          'A gentle yoga flow designed to wake up the body and focus the mind. No equipment required—perfect for easing into the day.',
-        tags: ['Wellness', 'Mindfulness', 'Beginner Friendly'],
-        reactions: { like: 12, love: 9, wow: 1, laugh: 0 },
-        userReaction: 'love'
-      },
-      {
-        id: 'feed-3',
-        title: 'How the JWST Sees the Universe',
-        sharedBy: 'Miguel Chen',
-        sharedAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
-        platform: 'Nebula',
-        url: 'https://nebula.tv/videos/space-jwst',
-        thumbnailUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1200&q=80',
-        channelName: 'Cosmic Perspectives',
-        durationSeconds: 1245,
-        viewCount: 38700,
-        description:
-          'Astrophysicist Dr. Mei Park breaks down the science behind the James Webb Space Telescope and what its discoveries mean for our understanding of deep space.',
-        tags: ['Science', 'Space', 'Documentary'],
-        reactions: { like: 21, love: 11, wow: 7, laugh: 0 },
-        userReaction: null
-      }
-    ]
+    entries: []
   }
 };
+
+const initialState: AppState = emptyAppState;
 
 function initializeState(defaultState: AppState): AppState {
   const stored = loadStoredSession();
@@ -402,6 +442,21 @@ function appReducer(state: AppState, action: AppStateAction): AppState {
         }
       };
     }
+    case 'set-friends':
+      return {
+        ...state,
+        friends: {
+          pending: action.payload.pending,
+          connections: action.payload.connections
+        }
+      };
+    case 'set-feed':
+      return {
+        ...state,
+        feed: {
+          entries: action.payload
+        }
+      };
     default:
       return state;
   }
@@ -421,8 +476,150 @@ export interface AppStateContextValue extends AppState {
 
 const AppStateContext = createContext<AppStateContextValue | undefined>(undefined);
 
+interface RawFriendRequest {
+  ID: string;
+  Requester: string;
+  Receiver: string;
+  Status: string;
+}
+
+interface RawVideoShare {
+  ID: string;
+  OwnerID: string;
+  URL: string;
+  Title?: string;
+  Description?: string;
+  Thumbnail?: string | null;
+  CreatedAt?: string;
+}
+
+function shouldUseMockLayer() {
+  if (USE_MOCK_DATA) {
+    return true;
+  }
+  return !API_BASE_URL;
+}
+
+async function loadFriendsFromApi(userId: string, tokens: SessionTokens | null) {
+  const query = new URLSearchParams({ user: userId });
+  const response = await getJSON<{ requests: RawFriendRequest[] }>(`/api/v1/friends?${query.toString()}`, tokens);
+
+  const connectionsMap = new Map<string, FriendConnection>();
+  const pendingInvites: FriendInvite[] = [];
+
+  for (const request of response.requests ?? []) {
+    const status = request.Status.toLowerCase();
+    const otherUser = request.Requester === userId ? request.Receiver : request.Requester;
+    if (status === 'pending' && request.Receiver === userId) {
+      pendingInvites.push({
+        id: request.ID,
+        displayName: deriveDisplayName(otherUser),
+        mutualFriends: 0
+      });
+      continue;
+    }
+
+    if (status === 'accepted' && otherUser) {
+      if (!connectionsMap.has(otherUser)) {
+        const statusCycle: FriendConnection['status'][] = ['online', 'away', 'offline'];
+        const statusIndex = connectionsMap.size % statusCycle.length;
+        connectionsMap.set(otherUser, {
+          id: otherUser,
+          displayName: deriveDisplayName(otherUser),
+          status: statusCycle[statusIndex]
+        });
+      }
+    }
+  }
+
+  return {
+    pending: pendingInvites,
+    connections: Array.from(connectionsMap.values())
+  };
+}
+
+async function loadFeedFromApi(userId: string, tokens: SessionTokens | null) {
+  const query = new URLSearchParams({ user: userId });
+  const response = await getJSON<{ entries: RawVideoShare[] }>(`/api/v1/videos/feed?${query.toString()}`, tokens);
+
+  return (response.entries ?? []).map((entry) => {
+    const title = entry.Title && entry.Title.trim().length > 0 ? entry.Title : 'Shared video';
+    const ownerDisplayName = deriveDisplayName(entry.OwnerID);
+    return {
+      id: entry.ID,
+      title,
+      sharedBy: ownerDisplayName,
+      sharedAt: entry.CreatedAt ?? new Date().toISOString(),
+      platform: inferPlatformFromUrl(entry.URL),
+      url: entry.URL,
+      thumbnailUrl: entry.Thumbnail ?? generateThumbnailForTitle(title),
+      channelName: `${ownerDisplayName}'s share`,
+      durationSeconds: generateDurationForShare(),
+      viewCount: generateViewCount(),
+      description: entry.Description ?? '',
+      tags: deriveTagsFromTitle(title),
+      reactions: { like: 0, love: 0, wow: 0, laugh: 0 },
+      userReaction: null
+    } satisfies FeedEntry;
+  });
+}
+
+function loadFriendsFromMock() {
+  return {
+    pending: mockFriendsState.pending.map((invite) => ({ ...invite })),
+    connections: mockFriendsState.connections.map((friend) => ({ ...friend }))
+  };
+}
+
+function loadFeedFromMock() {
+  return mockFeedEntries.map((entry) => ({ ...entry }));
+}
+
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState, initializeState);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const usingMock = shouldUseMockLayer();
+    const activeUserId = state.auth.user?.id ?? (usingMock ? 'mock-user' : '');
+
+    if (!activeUserId) {
+      dispatch({ type: 'set-friends', payload: { pending: [], connections: [] } });
+      dispatch({ type: 'set-feed', payload: [] });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    async function loadData() {
+      try {
+        const [friends, feed] = usingMock
+          ? [loadFriendsFromMock(), loadFeedFromMock()]
+          : await Promise.all([
+              loadFriendsFromApi(activeUserId, state.auth.tokens),
+              loadFeedFromApi(activeUserId, state.auth.tokens)
+            ]);
+
+        if (!cancelled) {
+          dispatch({ type: 'set-friends', payload: friends });
+          dispatch({ type: 'set-feed', payload: feed });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          dispatch({ type: 'set-friends', payload: loadFriendsFromMock() });
+          dispatch({ type: 'set-feed', payload: loadFeedFromMock() });
+        }
+        console.error('Failed to load VidFriends data', error);
+      }
+    }
+
+    loadData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.auth.tokens, state.auth.user]);
 
   const signIn = useCallback<AppStateContextValue['signIn']>(
     async ({ email, password }) => {
