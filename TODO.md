@@ -20,7 +20,7 @@ state to the feature set described in the documentation.
       video shares, then wire them into the HTTP handlers.
 - [x] Replace the in-memory session manager with a persistence-aware solution or
       make it pluggable so access/refresh tokens survive process restarts.
-- [ ] Flesh out the migration CLI (`go run ./cmd/vidfriends migrate ...`) so it
+- [x] Flesh out the migration CLI (`go run ./cmd/vidfriends migrate ...`) so it
       actually runs migrations using the configured database URL.
 - [ ] Implement the `/api/v1/videos/feed` endpoint backed by repository queries
       that respect a viewer's friendships.
