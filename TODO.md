@@ -38,7 +38,7 @@ state to the feature set described in the documentation.
       environment variables.
 
 ## Frontend
-- [ ] Replace the hard-coded mock data in `AppStateProvider` with real API calls
+- [x] Replace the hard-coded mock data in `AppStateProvider` with real API calls
       for friends, feed entries, and invitations. Provide a mock layer that can
       be toggled for offline development.
 - [ ] Align friend invitation mutation URLs with the backend (`/api/v1/friends/respond`)
