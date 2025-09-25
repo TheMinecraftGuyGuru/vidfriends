@@ -54,6 +54,10 @@ func (s failingUserStore) FindByEmail(context.Context, string) (models.User, err
 	return models.User{}, s.findErr
 }
 
+func newSessionManager() *auth.Manager {
+	return auth.NewManager(time.Minute, time.Hour, auth.NewInMemorySessionStore())
+}
+
 type stubSessionManager struct {
 	issueTokens   models.SessionTokens
 	issueErr      error
@@ -81,7 +85,7 @@ func (s *stubSessionManager) Refresh(_ context.Context, refreshToken string) (mo
 
 func TestAuthHandlerSignUp(t *testing.T) {
 	store := newInMemoryUserStore()
-	manager := auth.NewManager(time.Minute, time.Hour)
+	manager := newSessionManager()
 	handler := AuthHandler{Users: store, Sessions: manager}
 
 	body, err := json.Marshal(signUpRequest{Email: "test@example.com", Password: "supersafe"})
@@ -120,7 +124,7 @@ func TestAuthHandlerSignUp(t *testing.T) {
 func TestAuthHandlerSignUpValidationErrors(t *testing.T) {
 	t.Parallel()
 
-	manager := auth.NewManager(time.Minute, time.Hour)
+	manager := newSessionManager()
 	handler := AuthHandler{Users: newInMemoryUserStore(), Sessions: manager}
 
 	cases := []struct {
@@ -153,7 +157,7 @@ func TestAuthHandlerSignUpExistingAccount(t *testing.T) {
 	store := newInMemoryUserStore()
 	store.users["taken@example.com"] = models.User{Email: "taken@example.com"}
 
-	handler := AuthHandler{Users: store, Sessions: auth.NewManager(time.Minute, time.Hour)}
+	handler := AuthHandler{Users: store, Sessions: newSessionManager()}
 
 	body, _ := json.Marshal(signUpRequest{Email: "taken@example.com", Password: "password123"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/signup", bytes.NewReader(body))
@@ -196,7 +200,7 @@ func TestAuthHandlerSignUpStorageFailures(t *testing.T) {
 
 func TestAuthHandlerLogin(t *testing.T) {
 	store := newInMemoryUserStore()
-	manager := auth.NewManager(time.Minute, time.Hour)
+	manager := newSessionManager()
 	handler := AuthHandler{Users: store, Sessions: manager}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
@@ -236,7 +240,7 @@ func TestAuthHandlerLoginFailures(t *testing.T) {
 	store := newInMemoryUserStore()
 	store.users["user@example.com"] = models.User{ID: "user-1", Email: "user@example.com", Password: string(hashed)}
 
-	handler := AuthHandler{Users: store, Sessions: auth.NewManager(time.Minute, time.Hour)}
+	handler := AuthHandler{Users: store, Sessions: newSessionManager()}
 
 	cases := []struct {
 		name       string
@@ -296,7 +300,7 @@ func TestAuthHandlerLoginFailures(t *testing.T) {
 }
 
 func TestAuthHandlerRefresh(t *testing.T) {
-	manager := auth.NewManager(time.Minute, time.Hour)
+	manager := newSessionManager()
 	tokens, err := manager.Issue(context.Background(), "user-123")
 	if err != nil {
 		t.Fatalf("issue tokens: %v", err)
@@ -329,7 +333,7 @@ func TestAuthHandlerRefresh(t *testing.T) {
 }
 
 func TestAuthHandlerRefreshFailures(t *testing.T) {
-	manager := auth.NewManager(time.Minute, time.Hour)
+	manager := newSessionManager()
 	tokens, _ := manager.Issue(context.Background(), "user-123")
 
 	cases := []struct {

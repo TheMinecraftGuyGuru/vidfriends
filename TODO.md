@@ -18,7 +18,7 @@ state to the feature set described in the documentation.
 ## Backend
 - [x] Implement PostgreSQL-backed repositories for users, friend requests, and
       video shares, then wire them into the HTTP handlers.
-- [ ] Replace the in-memory session manager with a persistence-aware solution or
+- [x] Replace the in-memory session manager with a persistence-aware solution or
       make it pluggable so access/refresh tokens survive process restarts.
 - [ ] Flesh out the migration CLI (`go run ./cmd/vidfriends migrate ...`) so it
       actually runs migrations using the configured database URL.
