@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   db:
-    image: postgres:15
+    image: ${POSTGRES_IMAGE:-postgres:15}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -19,7 +19,7 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:RELEASE.2024-01-13T07-53-03Z
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2024-01-13T07-53-03Z}
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -32,7 +32,7 @@ services:
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
 
   createbuckets:
-    image: minio/mc:RELEASE.2024-01-11T07-46-16Z
+    image: ${MINIO_MC_IMAGE:-minio/mc:RELEASE.2024-01-11T07-46-16Z}
     depends_on:
       minio:
         condition: service_started
@@ -51,7 +51,7 @@ services:
       VIDFRIENDS_S3_BUCKET: ${VIDFRIENDS_S3_BUCKET}
 
   yt-dlp:
-    image: ghcr.io/yt-dlp/yt-dlp:2023.11.14
+    image: ${YTDLP_IMAGE:-ghcr.io/yt-dlp/yt-dlp:2023.11.14}
     entrypoint: >-
       /bin/sh -c "
       cp /usr/local/bin/yt-dlp /shared/yt-dlp && chmod +x /shared/yt-dlp &&
@@ -61,7 +61,7 @@ services:
       - yt-dlp-bin:/shared
 
   backend:
-    image: golang:1.22
+    image: ${BACKEND_IMAGE:-golang:1.22}
     depends_on:
       db:
         condition: service_healthy
@@ -75,8 +75,12 @@ services:
       VIDFRIENDS_PORT: ${BACKEND_PORT}
       VIDFRIENDS_DATABASE_URL: ${DATABASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
-      VIDFRIENDS_YTDLP_PATH: ${YT_DLP_PATH}
-      VIDFRIENDS_S3_ENDPOINT: http://minio:9000
+      VIDFRIENDS_LOG_LEVEL: ${VIDFRIENDS_LOG_LEVEL:-info}
+      VIDFRIENDS_MIGRATIONS: ${VIDFRIENDS_MIGRATIONS:-migrations}
+      VIDFRIENDS_YTDLP_PATH: ${YT_DLP_PATH:-/usr/local/bin/yt-dlp}
+      VIDFRIENDS_YTDLP_TIMEOUT: ${VIDFRIENDS_YTDLP_TIMEOUT:-30s}
+      VIDFRIENDS_METADATA_CACHE_TTL: ${VIDFRIENDS_METADATA_CACHE_TTL:-15m}
+      VIDFRIENDS_S3_ENDPOINT: ${VIDFRIENDS_S3_ENDPOINT:-http://minio:9000}
       VIDFRIENDS_S3_BUCKET: ${VIDFRIENDS_S3_BUCKET}
       VIDFRIENDS_S3_REGION: ${VIDFRIENDS_S3_REGION}
       VIDFRIENDS_S3_PUBLIC_BASE_URL: ${VIDFRIENDS_S3_PUBLIC_BASE_URL}
@@ -90,7 +94,7 @@ services:
       - "${BACKEND_PORT:-8080}:8080"
 
   frontend:
-    image: node:20
+    image: ${FRONTEND_IMAGE:-node:20}
     depends_on:
       backend:
         condition: service_started
@@ -99,7 +103,7 @@ services:
     env_file:
       - ../frontend/.env
     environment:
-      VITE_API_BASE_URL: http://backend:8080
+      VITE_API_BASE_URL: ${FRONTEND_API_BASE_URL:-http://backend:8080}
     volumes:
       - ../frontend:/app
     ports:

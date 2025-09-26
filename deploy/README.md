@@ -100,6 +100,66 @@ and exposed ports.
   directly from the MinIO endpoint.
 - **Restart policy**: Runs to completion and exits.
 
+## Configuration reference
+
+The Compose stack is configured entirely through environment variables sourced
+from `deploy/.env` and the service-specific `.env` files. The canonical list of
+supported settings and their defaults lives in [`deploy/settings.json`](settings.json).
+The tables below summarise the values you can override when launching the stack.
+
+### Container images
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `POSTGRES_IMAGE` | `postgres:15` | Image used for the PostgreSQL database service. |
+| `BACKEND_IMAGE` | `golang:1.22` | Base image that runs the Go backend in Compose. |
+| `FRONTEND_IMAGE` | `node:20` | Image that powers the Vite development server. |
+| `MINIO_IMAGE` | `minio/minio:RELEASE.2024-01-13T07-53-03Z` | MinIO object storage container image. |
+| `MINIO_MC_IMAGE` | `minio/mc:RELEASE.2024-01-11T07-46-16Z` | MinIO client image that provisions buckets. |
+| `YTDLP_IMAGE` | `ghcr.io/yt-dlp/yt-dlp:2023.11.14` | Helper image used to publish the `yt-dlp` binary onto a shared volume. |
+
+### Database connectivity
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `POSTGRES_USER` | `postgres` | Database superuser created by the `db` service. |
+| `POSTGRES_PASSWORD` | `postgres` | Password associated with `POSTGRES_USER`. |
+| `POSTGRES_DB` | `vidfriends` | Database created on first launch. |
+| `POSTGRES_PORT` | `5432` | Host port that publishes PostgreSQL outside of Docker. |
+| `DATABASE_URL` | `postgres://postgres:postgres@db:5432/vidfriends?sslmode=disable` | Connection string the backend uses to reach PostgreSQL inside the Compose network. |
+
+### Backend runtime
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `BACKEND_PORT` | `8080` | Host port published for the Go API. |
+| `SESSION_SECRET` | `replace-with-secure-random-string` | Secret used to sign and verify session cookies. |
+| `VIDFRIENDS_LOG_LEVEL` | `info` | Structured logging level emitted by the service. |
+| `VIDFRIENDS_MIGRATIONS` | `migrations` | Directory containing SQL migration files inside the container. |
+| `YT_DLP_PATH` | `/usr/local/bin/yt-dlp` | Filesystem path to the `yt-dlp` binary mounted in the backend container. |
+| `VIDFRIENDS_YTDLP_TIMEOUT` | `30s` | Maximum time the backend waits for `yt-dlp` metadata responses. |
+| `VIDFRIENDS_METADATA_CACHE_TTL` | `15m` | Lifetime of cached video metadata entries. |
+| `VIDFRIENDS_S3_ENDPOINT` | `http://minio:9000` | Internal endpoint used to talk to MinIO. |
+| `VIDFRIENDS_S3_BUCKET` | `vidfriends` | Bucket name created for storing processed assets. |
+| `VIDFRIENDS_S3_REGION` | `us-east-1` | Region identifier reported to S3 clients. |
+| `VIDFRIENDS_S3_PUBLIC_BASE_URL` | `http://localhost:9000/vidfriends` | Base URL used to build public links to stored videos. |
+
+### Frontend runtime
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `FRONTEND_PORT` | `5173` | Host port used by the Vite dev server. |
+| `FRONTEND_API_BASE_URL` | `http://backend:8080` | API origin the frontend proxies requests to while running in Compose. |
+
+### Object storage credentials
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MINIO_ROOT_USER` | `vidfriends` | Administrative access key for MinIO. |
+| `MINIO_ROOT_PASSWORD` | `vidfriends-secret` | Administrative secret key for MinIO. |
+| `MINIO_API_PORT` | `9000` | Host port exposing the MinIO S3-compatible API. |
+| `MINIO_CONSOLE_PORT` | `9001` | Host port exposing the MinIO management console. |
+
 ## Usage
 
 ```bash
