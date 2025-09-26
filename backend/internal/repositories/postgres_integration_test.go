@@ -354,6 +354,175 @@ func TestPostgresVideoRepository_ListFeed(t *testing.T) {
 	}
 }
 
+func TestPostgresVideoRepository_ListFeedIncludesInboundAcceptedFriends(t *testing.T) {
+	ctx := context.Background()
+	resetDatabase(t)
+
+	userRepo := NewPostgresUserRepository(testPool)
+	friendRepo := NewPostgresFriendRepository(testPool)
+	videoRepo := NewPostgresVideoRepository(testPool)
+
+	viewer := createTestUser(t, userRepo, "viewer-inbound@example.com")
+	inboundFriend := createTestUser(t, userRepo, "inbound@example.com")
+	pendingFriend := createTestUser(t, userRepo, "pending-inbound@example.com")
+
+	inboundReq := models.FriendRequest{
+		ID:        uuid.NewString(),
+		Requester: inboundFriend.ID,
+		Receiver:  viewer.ID,
+		Status:    "pending",
+		CreatedAt: time.Now().UTC().Add(-2 * time.Hour),
+	}
+	if err := friendRepo.CreateRequest(ctx, inboundReq); err != nil {
+		t.Fatalf("create inbound friend request: %v", err)
+	}
+	if err := friendRepo.UpdateStatus(ctx, inboundReq.ID, "accepted"); err != nil {
+		t.Fatalf("accept inbound friend request: %v", err)
+	}
+
+	pendingReq := models.FriendRequest{
+		ID:        uuid.NewString(),
+		Requester: viewer.ID,
+		Receiver:  pendingFriend.ID,
+		Status:    "pending",
+		CreatedAt: time.Now().UTC().Add(-time.Hour),
+	}
+	if err := friendRepo.CreateRequest(ctx, pendingReq); err != nil {
+		t.Fatalf("create pending friend request: %v", err)
+	}
+
+	baseTime := time.Now().UTC().Add(-45 * time.Minute)
+	inboundShare := models.VideoShare{
+		ID:          uuid.NewString(),
+		OwnerID:     inboundFriend.ID,
+		URL:         "https://example.com/inbound",
+		Title:       "Inbound Share",
+		CreatedAt:   baseTime.Add(10 * time.Minute),
+		AssetStatus: models.AssetStatusPending,
+	}
+	viewerShare := models.VideoShare{
+		ID:          uuid.NewString(),
+		OwnerID:     viewer.ID,
+		URL:         "https://example.com/viewer",
+		Title:       "Viewer Share",
+		CreatedAt:   baseTime.Add(15 * time.Minute),
+		AssetStatus: models.AssetStatusPending,
+	}
+	pendingShare := models.VideoShare{
+		ID:          uuid.NewString(),
+		OwnerID:     pendingFriend.ID,
+		URL:         "https://example.com/pending",
+		Title:       "Pending Share",
+		CreatedAt:   baseTime.Add(20 * time.Minute),
+		AssetStatus: models.AssetStatusPending,
+	}
+
+	for _, share := range []models.VideoShare{inboundShare, viewerShare, pendingShare} {
+		if err := videoRepo.Create(ctx, share); err != nil {
+			t.Fatalf("create share %s: %v", share.ID, err)
+		}
+	}
+
+	feed, err := videoRepo.ListFeed(ctx, viewer.ID)
+	if err != nil {
+		t.Fatalf("list feed with inbound friend: %v", err)
+	}
+
+	if len(feed) != 2 {
+		t.Fatalf("expected 2 feed entries (viewer + inbound friend), got %d", len(feed))
+	}
+
+	if feed[0].ID != viewerShare.ID || feed[1].ID != inboundShare.ID {
+		t.Fatalf("unexpected feed order: %+v", feed)
+	}
+
+	for _, share := range feed {
+		if share.OwnerID == pendingFriend.ID {
+			t.Fatalf("unexpected share from pending friend %s in feed", share.OwnerID)
+		}
+		if share.AssetStatus == "" {
+			t.Fatalf("expected asset status for share %s", share.ID)
+		}
+	}
+}
+
+func TestPostgresVideoRepository_UpdateAssetStatusTransitions(t *testing.T) {
+	ctx := context.Background()
+	resetDatabase(t)
+
+	userRepo := NewPostgresUserRepository(testPool)
+	videoRepo := NewPostgresVideoRepository(testPool)
+
+	owner := createTestUser(t, userRepo, "asset-owner@example.com")
+	share := models.VideoShare{
+		ID:          uuid.NewString(),
+		OwnerID:     owner.ID,
+		URL:         "https://example.com/watch",
+		Title:       "Asset Lifecycle",
+		CreatedAt:   time.Now().UTC().Add(-time.Minute),
+		AssetStatus: models.AssetStatusPending,
+	}
+
+	if err := videoRepo.Create(ctx, share); err != nil {
+		t.Fatalf("create share: %v", err)
+	}
+
+	readyURL := "https://cdn.example.com/asset.mp4"
+	readySize := int64(2048)
+	if err := videoRepo.MarkAssetReady(ctx, share.ID, readyURL, readySize); err != nil {
+		t.Fatalf("mark asset ready: %v", err)
+	}
+
+	feed, err := videoRepo.ListFeed(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("list feed after ready: %v", err)
+	}
+	if len(feed) != 1 {
+		t.Fatalf("expected 1 feed entry, got %d", len(feed))
+	}
+
+	updated := feed[0]
+	if updated.AssetStatus != models.AssetStatusReady {
+		t.Fatalf("expected asset status ready, got %s", updated.AssetStatus)
+	}
+	if updated.AssetURL != readyURL {
+		t.Fatalf("expected asset url %s, got %s", readyURL, updated.AssetURL)
+	}
+	if updated.AssetSize != readySize {
+		t.Fatalf("expected asset size %d, got %d", readySize, updated.AssetSize)
+	}
+
+	if err := videoRepo.MarkAssetFailed(ctx, share.ID); err != nil {
+		t.Fatalf("mark asset failed: %v", err)
+	}
+
+	feed, err = videoRepo.ListFeed(ctx, owner.ID)
+	if err != nil {
+		t.Fatalf("list feed after failed: %v", err)
+	}
+	if len(feed) != 1 {
+		t.Fatalf("expected 1 feed entry after failure, got %d", len(feed))
+	}
+
+	failed := feed[0]
+	if failed.AssetStatus != models.AssetStatusFailed {
+		t.Fatalf("expected asset status failed, got %s", failed.AssetStatus)
+	}
+	if failed.AssetURL != "" {
+		t.Fatalf("expected asset url cleared, got %s", failed.AssetURL)
+	}
+	if failed.AssetSize != 0 {
+		t.Fatalf("expected asset size reset, got %d", failed.AssetSize)
+	}
+
+	if err := videoRepo.MarkAssetReady(ctx, uuid.NewString(), readyURL, readySize); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound when marking missing asset ready, got %v", err)
+	}
+	if err := videoRepo.MarkAssetFailed(ctx, uuid.NewString()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound when marking missing asset failed, got %v", err)
+	}
+}
+
 func applyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	migrationsDir := filepath.Join("..", "..", "migrations")
 	entries, err := os.ReadDir(migrationsDir)
