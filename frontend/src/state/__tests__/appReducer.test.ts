@@ -52,7 +52,7 @@ describe('appReducer', () => {
     expect(declined.friends.connections[0]).toEqual(existingFriend);
   });
 
-  it('adds newly shared videos to the beginning of the feed', () => {
+  it('adds optimistic shares to the beginning of the feed and replaces them on success', () => {
     const originalEntry: FeedEntry = {
       id: 'feed-1',
       title: 'Cozy builds',
@@ -69,21 +69,73 @@ describe('appReducer', () => {
       reactions: { like: 2, love: 0, wow: 0, laugh: 0 },
       userReaction: null
     };
-    const newEntry: FeedEntry = {
+    const optimisticEntry: FeedEntry = {
       ...originalEntry,
-      id: 'feed-2',
+      id: 'optimistic-1',
       title: 'Speedrun tips',
       sharedAt: new Date().toISOString()
+    };
+    const persistedEntry: FeedEntry = {
+      ...optimisticEntry,
+      id: 'feed-2',
+      sharedAt: new Date().toISOString(),
+      thumbnailUrl: 'https://example.com/thumb2.jpg'
     };
 
     const state = createState({ feed: { entries: [originalEntry] } });
 
-    const next = appReducer(state, {
-      type: 'share-video',
-      payload: newEntry
+    const withOptimistic = appReducer(state, {
+      type: 'share-video-start',
+      payload: optimisticEntry
     } satisfies AppStateAction);
 
-    expect(next.feed.entries.map((entry) => entry.id)).toEqual(['feed-2', 'feed-1']);
+    expect(withOptimistic.feed.entries.map((entry) => entry.id)).toEqual([
+      'optimistic-1',
+      'feed-1'
+    ]);
+
+    const withPersisted = appReducer(withOptimistic, {
+      type: 'share-video-success',
+      payload: { optimisticId: 'optimistic-1', entry: persistedEntry }
+    } satisfies AppStateAction);
+
+    expect(withPersisted.feed.entries.map((entry) => entry.id)).toEqual(['feed-2', 'feed-1']);
+    expect(withPersisted.feed.entries[0]).toEqual(persistedEntry);
+  });
+
+  it('removes optimistic shares when persistence fails', () => {
+    const optimisticEntry: FeedEntry = {
+      id: 'optimistic-1',
+      title: 'Speedrun tips',
+      sharedBy: 'Alex',
+      sharedAt: new Date().toISOString(),
+      platform: 'YouTube',
+      url: 'https://example.com/2',
+      thumbnailUrl: 'https://example.com/thumb2.jpg',
+      channelName: 'Builders Guild',
+      durationSeconds: 480,
+      viewCount: 12_300,
+      description: 'A calming timelapse build.',
+      tags: ['Relax'],
+      reactions: { like: 2, love: 0, wow: 0, laugh: 0 },
+      userReaction: null
+    };
+
+    const state = createState({ feed: { entries: [] } });
+
+    const withOptimistic = appReducer(state, {
+      type: 'share-video-start',
+      payload: optimisticEntry
+    } satisfies AppStateAction);
+
+    expect(withOptimistic.feed.entries).toHaveLength(1);
+
+    const reverted = appReducer(withOptimistic, {
+      type: 'share-video-error',
+      payload: { optimisticId: 'optimistic-1' }
+    } satisfies AppStateAction);
+
+    expect(reverted.feed.entries).toHaveLength(0);
   });
 
   it('toggles reactions and keeps counts consistent', () => {
