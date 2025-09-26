@@ -38,3 +38,100 @@ a {
   min-height: 100vh;
   font-size: 1.25rem;
 }
+
+.app-error-boundary {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: radial-gradient(circle at top, rgba(56, 189, 248, 0.25), #020617 60%);
+}
+
+.app-error-boundary__content {
+  max-width: 480px;
+  padding: 2rem;
+  border-radius: 1.5rem;
+  background-color: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.5);
+  text-align: center;
+}
+
+.app-error-boundary__content h1 {
+  margin-top: 0;
+  font-size: 1.75rem;
+}
+
+.app-error-boundary__content pre {
+  white-space: pre-wrap;
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background-color: rgba(15, 23, 42, 0.6);
+  color: rgba(248, 250, 252, 0.8);
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
+.app-error-boundary__content button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  border: none;
+  background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+  color: #0f172a;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast-viewport {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  z-index: 1000;
+}
+
+.toast {
+  min-width: 280px;
+  max-width: 360px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.toast-info {
+  background: rgba(30, 64, 175, 0.9);
+  color: #dbeafe;
+}
+
+.toast-success {
+  background: rgba(22, 101, 52, 0.9);
+  color: #dcfce7;
+}
+
+.toast-error {
+  background: rgba(190, 18, 60, 0.9);
+  color: #fee2e2;
+}
+
+.toast button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toast button:hover {
+  opacity: 0.75;
+}

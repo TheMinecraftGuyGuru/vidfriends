@@ -9,6 +9,8 @@ import {
   useRef
 } from 'react';
 
+import { useToast } from '../components/ToastProvider';
+
 const SESSION_STORAGE_KEY = 'vidfriends.session';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -561,6 +563,20 @@ async function loadFeedFromApi(userId: string, tokens: SessionTokens | null) {
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState, initializeState);
+  const { showToast } = useToast();
+  const surfaceApiError = useCallback(
+    (error: unknown, fallbackMessage: string) => {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : fallbackMessage;
+      showToast(message, { variant: 'error' });
+      return message;
+    },
+    [showToast]
+  );
   const refreshPromiseRef = useRef<Promise<SessionTokens | null> | null>(null);
 
   const refreshSession = useCallback(async (): Promise<SessionTokens | null> => {
@@ -596,7 +612,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         if (error instanceof ApiError && error.status === 401) {
           clearStoredSession();
           dispatch({ type: 'sign-out' });
+          showToast('Your session has expired. Please sign in again.', { variant: 'error' });
         } else {
+          surfaceApiError(error, 'Unable to refresh your session. Please sign in again soon.');
           console.error('Failed to refresh VidFriends session', error);
         }
         return null;
@@ -607,7 +625,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     refreshPromiseRef.current = refreshAttempt;
     return refreshAttempt;
-  }, [dispatch, state.auth.tokens, state.auth.user]);
+  }, [dispatch, showToast, state.auth.tokens, state.auth.user, surfaceApiError]);
 
   const ensureActiveTokens = useCallback(async (): Promise<SessionTokens | null> => {
     const tokens = state.auth.tokens;
@@ -695,9 +713,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           if (error instanceof ApiError && error.status === 401) {
             clearStoredSession();
             dispatch({ type: 'sign-out' });
+            showToast('Your session has expired. Please sign in again.', { variant: 'error' });
           } else {
             dispatch({ type: 'set-friends', payload: { pending: [], connections: [] } });
             dispatch({ type: 'set-feed', payload: [] });
+            surfaceApiError(error, 'We could not load your VidFriends data. Please try again soon.');
           }
         }
         console.error('Failed to load VidFriends data', error);
@@ -709,7 +729,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [ensureActiveTokens, state.auth.user]);
+  }, [ensureActiveTokens, showToast, state.auth.user, surfaceApiError]);
 
   const signIn = useCallback<AppStateContextValue['signIn']>(
     async ({ email, password }) => {
@@ -729,13 +749,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         persistSession({ user, tokens });
         return user;
       } catch (error) {
-        if (error instanceof ApiError) {
-          throw new Error(error.message);
-        }
-        throw error instanceof Error ? error : new Error('Unable to sign in. Please try again.');
+        const message = surfaceApiError(error, 'Unable to sign in. Please try again.');
+        throw new Error(message);
       }
     },
-    [dispatch]
+    [dispatch, surfaceApiError]
   );
 
   const signUp = useCallback<AppStateContextValue['signUp']>(
@@ -756,13 +774,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         persistSession({ user, tokens });
         return user;
       } catch (error) {
-        if (error instanceof ApiError) {
-          throw new Error(error.message);
-        }
-        throw error instanceof Error ? error : new Error('Unable to create your account. Please try again.');
+        const message = surfaceApiError(error, 'Unable to create your account. Please try again.');
+        throw new Error(message);
       }
     },
-    [dispatch]
+    [dispatch, surfaceApiError]
   );
 
   const requestPasswordReset = useCallback<AppStateContextValue['requestPasswordReset']>(
@@ -774,19 +790,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       try {
         await postJSON('/api/v1/auth/password-reset', { email: normalizedEmail });
       } catch (error) {
-        if (error instanceof ApiError) {
-          if (error.status === 404) {
-            // Password reset API is not yet available; treat as success so the user can continue.
-            return;
-          }
-          throw new Error(error.message);
+        if (error instanceof ApiError && error.status === 404) {
+          // Password reset API is not yet available; treat as success so the user can continue.
+          return;
         }
-        throw error instanceof Error
-          ? error
-          : new Error('Unable to request a password reset at this time. Please try again.');
+        const message = surfaceApiError(
+          error,
+          'Unable to request a password reset at this time. Please try again.'
+        );
+        throw new Error(message);
       }
     },
-    []
+    [surfaceApiError]
   );
 
   const signOut = useCallback(() => {
@@ -833,15 +848,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         dispatch({ type: 'set-friends', payload: previousFriendsState });
 
-        if (error instanceof ApiError) {
-          throw new Error(error.message);
-        }
-        throw error instanceof Error
-          ? error
-          : new Error('Unable to update the invitation at this time. Please try again.');
+        const message = surfaceApiError(
+          error,
+          'Unable to update the invitation at this time. Please try again.'
+        );
+        throw new Error(message);
       }
     },
-    [ensureActiveTokens, state.friends.connections, state.friends.pending]
+    [ensureActiveTokens, state.friends.connections, state.friends.pending, surfaceApiError]
   );
 
   const shareVideo = useCallback<AppStateContextValue['shareVideo']>(
@@ -928,18 +942,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         dispatch({ type: 'share-video-error', payload: { optimisticId } });
 
-        if (error instanceof ApiError) {
-          throw new Error(error.message);
-        }
-
-        if (error instanceof Error) {
-          throw error;
-        }
-
-        throw new Error('Unable to share this video right now. Please try again.');
+        const message = surfaceApiError(
+          error,
+          'Unable to share this video right now. Please try again.'
+        );
+        throw new Error(message);
       }
     },
-    [ensureActiveTokens, state.auth.user?.displayName, state.auth.user?.id]
+    [ensureActiveTokens, state.auth.user?.displayName, state.auth.user?.id, surfaceApiError]
   );
 
   const reactToVideo = useCallback<AppStateContextValue['reactToVideo']>(
