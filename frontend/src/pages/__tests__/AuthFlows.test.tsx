@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from '../../App';
+import { ToastProvider } from '../../components/ToastProvider';
 import { AppStateProvider } from '../../state/AppStateProvider';
 
 type JsonValue = Record<string, unknown> | null;
@@ -28,11 +29,13 @@ function extractUrl(input: RequestInfo | URL): string {
 
 function renderApp(initialEntries: string[]) {
   return render(
-    <AppStateProvider>
-      <MemoryRouter initialEntries={initialEntries}>
-        <App />
-      </MemoryRouter>
-    </AppStateProvider>
+    <ToastProvider>
+      <AppStateProvider>
+        <MemoryRouter initialEntries={initialEntries}>
+          <App />
+        </MemoryRouter>
+      </AppStateProvider>
+    </ToastProvider>
   );
 }
 
@@ -124,9 +127,9 @@ describe('VidFriends authentication journeys', () => {
     await user.type(passwordInput, 'bad-password');
     await user.click(screen.getByRole('button', { name: /log in/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument()
-    );
+    await waitFor(() => {
+      expect(screen.getAllByText(/invalid credentials/i).length).toBeGreaterThan(0);
+    });
 
     expect(emailInput).toHaveValue('alex@example.com');
     expect(passwordInput).toHaveValue('bad-password');
