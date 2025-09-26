@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +13,11 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/vidfriends/backend/internal/config"
 	"github.com/vidfriends/backend/internal/db"
@@ -87,6 +93,18 @@ func serve(ctx context.Context) error {
 	defer cancel()
 
 	return srv.Shutdown(shutdownCtx)
+}
+
+const (
+	migrationMaxRetries  = 3
+	migrationBaseBackoff = 100 * time.Millisecond
+	migrationMaxBackoff  = 3 * time.Second
+)
+
+var retryablePgErrorCodes = map[string]struct{}{
+	"40001": {}, // serialization_failure
+	"40P01": {}, // deadlock_detected
+	"55P03": {}, // lock_not_available
 }
 
 func runMigrations(ctx context.Context, args []string) error {
@@ -191,23 +209,8 @@ func runMigrations(ctx context.Context, args []string) error {
 				return fmt.Errorf("read migration %s: %w", name, err)
 			}
 
-			tx, err := conn.Begin(ctx)
-			if err != nil {
-				return fmt.Errorf("begin migration transaction for %s: %w", name, err)
-			}
-
-			if _, err := tx.Exec(ctx, string(contents)); err != nil {
-				_ = tx.Rollback(ctx)
-				return fmt.Errorf("apply migration %s: %w", name, err)
-			}
-
-			if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, name); err != nil {
-				_ = tx.Rollback(ctx)
-				return fmt.Errorf("record migration %s: %w", name, err)
-			}
-
-			if err := tx.Commit(ctx); err != nil {
-				return fmt.Errorf("commit migration %s: %w", name, err)
+			if err := applyMigrationWithRetry(ctx, conn, name, string(contents)); err != nil {
+				return err
 			}
 
 			fmt.Printf("applied migration %s\n", name)
@@ -268,4 +271,83 @@ func runSeed(ctx context.Context, args []string) error {
 
 	fmt.Printf("applied seed %s\n", seedName)
 	return nil
+}
+
+func applyMigrationWithRetry(ctx context.Context, conn *pgxpool.Conn, name string, contents string) error {
+	var attempt int
+	for attempt = 0; attempt < migrationMaxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(math.Pow(2, float64(attempt-1))) * migrationBaseBackoff
+			if backoff > migrationMaxBackoff {
+				backoff = migrationMaxBackoff
+			}
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+			timer.Stop()
+		}
+
+		tx, err := conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+		if err != nil {
+			return fmt.Errorf("begin migration transaction for %s: %w", name, err)
+		}
+
+		if _, err := tx.Exec(ctx, contents); err != nil {
+			_ = tx.Rollback(ctx)
+			if shouldRetryMigration(err) && attempt < migrationMaxRetries-1 {
+				fmt.Printf("transient error applying migration %s (attempt %d/%d): %v\n", name, attempt+1, migrationMaxRetries, err)
+				continue
+			}
+			return fmt.Errorf("apply migration %s: %w", name, err)
+		}
+
+		if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, name); err != nil {
+			_ = tx.Rollback(ctx)
+			if shouldRetryMigration(err) && attempt < migrationMaxRetries-1 {
+				fmt.Printf("transient error recording migration %s (attempt %d/%d): %v\n", name, attempt+1, migrationMaxRetries, err)
+				continue
+			}
+			return fmt.Errorf("record migration %s: %w", name, err)
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			_ = tx.Rollback(ctx)
+			if shouldRetryMigration(err) && attempt < migrationMaxRetries-1 {
+				fmt.Printf("transient error committing migration %s (attempt %d/%d): %v\n", name, attempt+1, migrationMaxRetries, err)
+				continue
+			}
+			return fmt.Errorf("commit migration %s: %w", name, err)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("apply migration %s: exceeded max retries (%d)", name, attempt)
+}
+
+func shouldRetryMigration(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		if _, ok := retryablePgErrorCodes[pgErr.Code]; ok {
+			return true
+		}
+	}
+
+	if errors.Is(err, pgx.ErrTxClosed) {
+		return true
+	}
+
+	return false
 }
