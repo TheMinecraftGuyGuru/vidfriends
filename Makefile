@@ -4,7 +4,7 @@ BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 PNPM := pnpm
 
-.PHONY: help test lint backend-test backend-lint backend-migrate-up backend-migrate-down backend-migrate-status frontend-install frontend-test frontend-lint frontend-build
+.PHONY: help test lint backend-test backend-lint backend-migrate-up backend-migrate-down backend-migrate-status backend-seed frontend-install frontend-test frontend-lint frontend-build
 
 help: ## Show available make targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -30,7 +30,10 @@ backend-migrate-down: ## Roll back the most recent migration (down) using the ba
 	cd $(BACKEND_DIR) && go run ./cmd/vidfriends migrate down
 
 backend-migrate-status: ## Show the status of database migrations using the backend CLI
-	cd $(BACKEND_DIR) && go run ./cmd/vidfriends migrate status
+        cd $(BACKEND_DIR) && go run ./cmd/vidfriends migrate status
+
+backend-seed: ## Apply the development seed data using the backend CLI
+        cd $(BACKEND_DIR) && go run ./cmd/vidfriends seed dev
 
 frontend-install: ## Install frontend dependencies with pnpm
 	$(PNPM) --dir $(FRONTEND_DIR) install

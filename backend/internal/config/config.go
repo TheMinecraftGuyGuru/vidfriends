@@ -11,6 +11,7 @@ type Config struct {
 	AppPort          int
 	DatabaseURL      string
 	MigrationDir     string
+	SeedDir          string
 	LogLevel         string
 	YTDLPPath        string
 	YTDLPTimeout     time.Duration
@@ -34,6 +35,7 @@ func Load() (Config, error) {
 		AppPort:          getInt("VIDFRIENDS_PORT", 8080),
 		DatabaseURL:      getString("VIDFRIENDS_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/vidfriends?sslmode=disable"),
 		MigrationDir:     getString("VIDFRIENDS_MIGRATIONS", "migrations"),
+		SeedDir:          getString("VIDFRIENDS_SEEDS", "seeds"),
 		LogLevel:         getString("VIDFRIENDS_LOG_LEVEL", "info"),
 		YTDLPPath:        getString("VIDFRIENDS_YTDLP_PATH", "yt-dlp"),
 		YTDLPTimeout:     getDuration("VIDFRIENDS_YTDLP_TIMEOUT", 30*time.Second),

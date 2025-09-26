@@ -22,7 +22,12 @@ startup.
    ```bash
    go run ./cmd/vidfriends migrate up
    ```
-3. Start the API server:
+   To inspect which migrations have run, use `go run ./cmd/vidfriends migrate status`.
+3. Seed the development database with sample users, friendships, and shares:
+   ```bash
+   go run ./cmd/vidfriends seed dev
+   ```
+4. Start the API server:
    ```bash
    go run ./cmd/vidfriends serve
    ```
