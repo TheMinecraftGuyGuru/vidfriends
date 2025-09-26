@@ -1,6 +1,8 @@
 module github.com/vidfriends/backend
 
-go 1.23.0
+go 1.24.0
+
+toolchain go1.24.3
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.39.1
@@ -11,6 +13,7 @@ require (
 	github.com/google/uuid v1.3.1
 	github.com/jackc/pgx/v5 v5.7.6
 	golang.org/x/crypto v0.37.0
+	golang.org/x/time v0.13.0
 )
 
 require (

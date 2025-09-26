@@ -9,7 +9,7 @@ MVP. Items are grouped roughly in the order they should be tackled; update the l
 - [x] Harden the migration CLI with rollback support or transactional retries so failed runs can be recovered without dropping the database.
 - [x] Wire structured logging and tracing context into all handlers to simplify debugging during integration testing.
 - [x] Implement background jobs to persist video assets to object storage once `yt-dlp` metadata retrieval succeeds.
-- [ ] Add rate limiting and input validation guards to authentication and invite endpoints.
+- [x] Add rate limiting and input validation guards to authentication and invite endpoints.
 
 ## Frontend integration
 

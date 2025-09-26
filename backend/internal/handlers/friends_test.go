@@ -14,6 +14,17 @@ import (
 	"github.com/vidfriends/backend/internal/repositories"
 )
 
+const (
+	requesterUUID = "11111111-1111-1111-1111-111111111111"
+	receiverUUID  = "22222222-2222-2222-2222-222222222222"
+)
+
+type friendStubRateLimiter struct {
+	allow bool
+}
+
+func (s friendStubRateLimiter) Allow(string) bool { return s.allow }
+
 type inMemoryFriendStore struct {
 	requests map[string]models.FriendRequest
 }
@@ -80,7 +91,7 @@ func TestFriendHandlerInvite(t *testing.T) {
 	now := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 	handler := FriendHandler{Friends: store, NowFunc: func() time.Time { return now }}
 
-	body, err := json.Marshal(inviteFriendRequest{RequesterID: "user-1", ReceiverID: "user-2"})
+	body, err := json.Marshal(inviteFriendRequest{RequesterID: requesterUUID, ReceiverID: receiverUUID})
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
 	}
@@ -113,7 +124,7 @@ func TestFriendHandlerInvite(t *testing.T) {
 }
 
 func TestFriendHandlerInviteFailures(t *testing.T) {
-	body := []byte(`{"requesterId":"user-1","receiverId":"user-2"}`)
+	body := []byte(`{"requesterId":"` + requesterUUID + `","receiverId":"` + receiverUUID + `"}`)
 
 	cases := []struct {
 		name       string
@@ -126,7 +137,9 @@ func TestFriendHandlerInviteFailures(t *testing.T) {
 		{"missingStore", FriendHandler{}, http.MethodPost, body, http.StatusInternalServerError},
 		{"badJSON", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte("{"), http.StatusBadRequest},
 		{"missingFields", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte(`{"requesterId":"","receiverId":""}`), http.StatusBadRequest},
-		{"selfInvite", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte(`{"requesterId":"same","receiverId":"same"}`), http.StatusBadRequest},
+		{"selfInvite", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte(`{"requesterId":"` + requesterUUID + `","receiverId":"` + requesterUUID + `"}`), http.StatusBadRequest},
+		{"invalidRequester", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte(`{"requesterId":"bad","receiverId":"` + receiverUUID + `"}`), http.StatusBadRequest},
+		{"invalidReceiver", FriendHandler{Friends: newInMemoryFriendStore()}, http.MethodPost, []byte(`{"requesterId":"` + requesterUUID + `","receiverId":"bad"}`), http.StatusBadRequest},
 		{"conflict", FriendHandler{Friends: &stubFriendStore{createErr: repositories.ErrConflict}}, http.MethodPost, body, http.StatusConflict},
 		{"notFound", FriendHandler{Friends: &stubFriendStore{createErr: repositories.ErrNotFound}}, http.MethodPost, body, http.StatusNotFound},
 		{"internal", FriendHandler{Friends: &stubFriendStore{createErr: errors.New("boom")}}, http.MethodPost, body, http.StatusInternalServerError},
@@ -143,6 +156,20 @@ func TestFriendHandlerInviteFailures(t *testing.T) {
 				t.Fatalf("expected status %d got %d", tc.wantStatus, rec.Code)
 			}
 		})
+	}
+}
+
+func TestFriendHandlerInviteRateLimited(t *testing.T) {
+	handler := FriendHandler{RateLimiter: friendStubRateLimiter{allow: false}}
+
+	body := []byte(`{"requesterId":"` + requesterUUID + `","receiverId":"` + receiverUUID + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/friends/invite", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.Invite(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected too many requests got %d", rec.Code)
 	}
 }
 

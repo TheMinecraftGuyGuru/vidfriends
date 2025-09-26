@@ -1,12 +1,21 @@
 package handlers
 
-import "net/http"
+import (
+	"net/http"
+	"time"
+
+	"github.com/vidfriends/backend/internal/middleware"
+)
 
 // RegisterRoutes wires HTTP handlers into the provided ServeMux.
 func RegisterRoutes(mux *http.ServeMux, deps Dependencies) {
 	health := HealthHandler{}
-	auth := AuthHandler{Users: deps.Users, Sessions: deps.Sessions}
-	friends := FriendHandler{Friends: deps.Friends}
+
+	authLimiter := middleware.NewIPRateLimiter(10, time.Minute, 5, 15*time.Minute)
+	inviteLimiter := middleware.NewIPRateLimiter(5, time.Minute, 3, 15*time.Minute)
+
+	auth := AuthHandler{Users: deps.Users, Sessions: deps.Sessions, RateLimiter: authLimiter}
+	friends := FriendHandler{Friends: deps.Friends, RateLimiter: inviteLimiter}
 	videos := VideoHandler{Videos: deps.Videos, Metadata: deps.VideoMetadata, Assets: deps.VideoAssets}
 
 	mux.HandleFunc("/healthz", health.Handle)

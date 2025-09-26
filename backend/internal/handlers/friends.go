@@ -22,8 +22,9 @@ const (
 
 // FriendHandler provides friend invite and listing endpoints.
 type FriendHandler struct {
-	Friends FriendStore
-	NowFunc func() time.Time
+	Friends     FriendStore
+	NowFunc     func() time.Time
+	RateLimiter RateLimiter
 }
 
 // Invite handles POST /api/v1/friends/invite.
@@ -36,6 +37,12 @@ func (h FriendHandler) Invite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !allowRequest(h.RateLimiter, r, "friends:invite") {
+		logger.Warn("rate limit exceeded", "scope", "friends:invite")
+		respondJSON(ctx, w, http.StatusTooManyRequests, map[string]string{"error": "too many friend invites"})
 		return
 	}
 
@@ -64,6 +71,18 @@ func (h FriendHandler) Invite(w http.ResponseWriter, r *http.Request) {
 	if req.RequesterID == req.ReceiverID {
 		logger.Warn("invite attempted self", "userId", req.RequesterID)
 		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "cannot invite yourself"})
+		return
+	}
+
+	if _, err := uuid.Parse(req.RequesterID); err != nil {
+		logger.Warn("invite invalid requester id", "requesterId", req.RequesterID, "error", err)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid requesterId"})
+		return
+	}
+
+	if _, err := uuid.Parse(req.ReceiverID); err != nil {
+		logger.Warn("invite invalid receiver id", "receiverId", req.ReceiverID, "error", err)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid receiverId"})
 		return
 	}
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,6 +58,12 @@ func (s failingUserStore) FindByEmail(context.Context, string) (models.User, err
 func newSessionManager() *auth.Manager {
 	return auth.NewManager(time.Minute, time.Hour, auth.NewInMemorySessionStore())
 }
+
+type stubRateLimiter struct {
+	allow bool
+}
+
+func (s stubRateLimiter) Allow(string) bool { return s.allow }
 
 type stubSessionManager struct {
 	issueTokens   models.SessionTokens
@@ -136,6 +143,7 @@ func TestAuthHandlerSignUpValidationErrors(t *testing.T) {
 		{"missingFields", []byte(`{"email":"","password":""}`), http.StatusBadRequest},
 		{"invalidEmail", []byte(`{"email":"bad","password":"password"}`), http.StatusBadRequest},
 		{"shortPassword", []byte(`{"email":"user@example.com","password":"short"}`), http.StatusBadRequest},
+		{"longPassword", []byte(`{"email":"user@example.com","password":"` + strings.Repeat("a", 100) + `"}`), http.StatusBadRequest},
 	}
 
 	for _, tc := range cases {
@@ -250,8 +258,10 @@ func TestAuthHandlerLoginFailures(t *testing.T) {
 		{"badMethod", nil, http.StatusMethodNotAllowed},
 		{"invalidJSON", "{", http.StatusBadRequest},
 		{"missingFields", loginRequest{}, http.StatusBadRequest},
+		{"invalidEmail", loginRequest{Email: "bad", Password: "password123"}, http.StatusBadRequest},
+		{"shortPassword", loginRequest{Email: "user@example.com", Password: "short"}, http.StatusBadRequest},
 		{"notFound", loginRequest{Email: "missing@example.com", Password: "password123"}, http.StatusUnauthorized},
-		{"wrongPassword", loginRequest{Email: "user@example.com", Password: "wrong"}, http.StatusUnauthorized},
+		{"wrongPassword", loginRequest{Email: "user@example.com", Password: "wrongpass"}, http.StatusUnauthorized},
 	}
 
 	for _, tc := range cases {
@@ -296,6 +306,20 @@ func TestAuthHandlerLoginFailures(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected internal error got %d", rec.Code)
+	}
+}
+
+func TestAuthHandlerLoginRateLimited(t *testing.T) {
+	handler := AuthHandler{RateLimiter: stubRateLimiter{allow: false}}
+
+	body, _ := json.Marshal(loginRequest{Email: "user@example.com", Password: "password123"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.Login(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected too many requests got %d", rec.Code)
 	}
 }
 
