@@ -33,9 +33,21 @@ func RequestLogger(base *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			requestID := uuid.NewString()
+			if headerID := r.Header.Get("X-Request-ID"); headerID != "" {
+				requestID = headerID
+			}
+
+			traceID := r.Header.Get("X-Trace-ID")
+			if traceID == "" {
+				traceID = uuid.NewString()
+			}
+
+			spanID := uuid.NewString()
 
 			reqLogger := base.With(
 				slog.String("request_id", requestID),
+				slog.String("trace_id", traceID),
+				slog.String("span_id", spanID),
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.String("remote_addr", r.RemoteAddr),
@@ -43,6 +55,11 @@ func RequestLogger(base *slog.Logger) func(http.Handler) http.Handler {
 
 			ctx := logging.WithLogger(r.Context(), reqLogger)
 			ctx = logging.WithRequestID(ctx, requestID)
+			ctx = logging.WithTraceID(ctx, traceID)
+			ctx = logging.WithSpanID(ctx, spanID)
+
+			w.Header().Set("X-Request-ID", requestID)
+			w.Header().Set("X-Trace-ID", traceID)
 
 			wrapped := &responseWriter{ResponseWriter: w}
 
