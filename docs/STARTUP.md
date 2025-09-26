@@ -1,11 +1,15 @@
 # VidFriends Startup Guide
 
-This guide describes how to bootstrap the VidFriends development environment in two different ways:
+This guide describes how to bootstrap the VidFriends development environment in two different ways. The stack is still under
+active development—several flows rely on mock data, migrations are evolving, and yt-dlp downloads are not yet persisted—so the
+steps below call out known limitations to help you plan your testing strategy.
 
 1. **Local toolchain** – run each service (Go API, PostgreSQL, React frontend) directly on your machine.
 2. **Docker Compose** – start the entire stack with containers and minimal host dependencies.
 
-Use whichever method best matches your workflow. The Docker Compose path is usually fastest for first-time contributors, while the local toolchain workflow makes iterative backend/frontend development easier.
+Use whichever method best matches your workflow. The Docker Compose path is usually fastest for first-time contributors, while
+the local toolchain workflow makes iterative backend/frontend development easier. Expect to lean on the frontend mock mode
+(`VITE_USE_MOCKS=true` and `VITE_USE_MOCK_DATA=true`) until more API endpoints are production-ready.
 
 ---
 
@@ -21,13 +25,14 @@ Install the following software before you begin:
 | [Node.js](https://nodejs.org/en/download/) | 18 LTS | Runs the React development server and tooling. |
 | [pnpm](https://pnpm.io/installation) or [npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) | latest | Installs frontend dependencies. |
 | [PostgreSQL](https://www.postgresql.org/download/) | 14+ | Local development database. |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) | latest | CLI utility used by the backend for video metadata lookups and downloading shared videos for storage. |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) | latest | CLI utility used by the backend for video metadata lookups. Downloads are still skipped in development builds. |
 
 Optional but recommended:
 
 - [golangci-lint](https://golangci-lint.run/welcome/install/) to run the Go linters locally.
 - [Air](https://github.com/cosmtrek/air) or a similar hot-reload tool for the Go service.
 - [mkcert](https://github.com/FiloSottile/mkcert) if you want to test HTTPS locally.
+- [`httpie`](https://httpie.io/) or [`curl`](https://curl.se/) for exercising API endpoints without the frontend mocks.
 
 ### Docker-based prerequisites
 
@@ -50,13 +55,16 @@ deploy/          # Docker Compose, container build scripts, and k8s manifests
 configs/         # Sample configuration and environment files
 ```
 
-Some of these directories are generated during development or may be moved as the project evolves, but the startup steps below assume this default layout.
+Some of these directories are generated during development or may be moved as the project evolves, but the startup steps below
+assume this default layout.
 
 ---
 
 ## 3. Configure environment variables
 
-Both the backend service and the Docker Compose deployment read configuration from environment variables. The repository includes example files that you can copy and customize:
+Both the backend service and the Docker Compose deployment read configuration from environment variables. The repository includes
+example files that you can copy and customize. See [`docs/ENVIRONMENT_VARIABLES.md`](ENVIRONMENT_VARIABLES.md) for a full catalog
+of supported options and defaults:
 
 ```bash
 cp configs/backend.env.example backend/.env
@@ -70,11 +78,12 @@ Update the copied files with values that match your environment. At a minimum yo
   `postgres://postgres:postgres@localhost:5432/vidfriends?sslmode=disable`).
 - `SESSION_SECRET` – random 32+ byte string for signing session cookies. Generate
   a new value with `openssl rand -base64 32`.
-- `YT_DLP_PATH` – optional path to the `yt-dlp` binary if it is not on `$PATH`.
+- `YT_DLP_PATH` – optional path to the `yt-dlp` binary if it is not on `$PATH`. Metadata lookups fall back to mock data if the
+  binary is missing.
 - `VITE_API_BASE_URL` – API origin for the frontend (`http://localhost:8080` in
-  local development).
-- `VITE_USE_MOCKS` – toggle the frontend's mock service layer (`false` by
-  default).
+  local development). When pointing at a partially implemented backend, set `VITE_USE_MOCKS=true` (and `VITE_USE_MOCK_DATA=true`) to avoid broken requests.
+- `VITE_USE_MOCKS` – toggle the frontend's mock service layer (`false` by default, but `true` is recommended until the API
+  stabilizes). Some components also look for `VITE_USE_MOCK_DATA`; keep both flags in sync for now.
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` – credentials the
   Docker Compose workflow applies to the PostgreSQL container.
 - `BACKEND_PORT` / `FRONTEND_PORT` – override ports exposed by Docker Compose if
@@ -90,7 +99,8 @@ Follow these steps to run the stack directly on your machine.
 
 ### 4.1 Start PostgreSQL
 
-Create a database role and schema for VidFriends. The example below uses the default PostgreSQL superuser:
+Create a database role and schema for VidFriends. The example below uses the default PostgreSQL superuser. Until migrations are
+finalized you may need to drop and recreate the database between iterations:
 
 ```bash
 createdb vidfriends
@@ -105,18 +115,16 @@ DATABASE_URL=postgres://localhost:5432/vidfriends?sslmode=disable
 
 ### 4.2 Run database migrations
 
-The Go service automatically runs migrations on startup, but you can run them manually for faster feedback:
+The Go service automatically runs migrations on startup, but you can run them manually for faster feedback. Downward migrations
+are not yet supported, so re-apply by recreating the database if something goes wrong:
 
 ```bash
 cd backend
 go run ./cmd/vidfriends migrate up
 ```
 
-This command uses the `migrations/` directory to apply schema changes. To roll back:
-
-```bash
-go run ./cmd/vidfriends migrate down 1
-```
+This command uses the `migrations/` directory to apply schema changes in sorted order. Use `go run ./cmd/vidfriends migrate status`
+to list applied migrations.
 
 ### 4.3 Launch the Go API
 
@@ -128,7 +136,9 @@ source .env
 go run ./cmd/vidfriends serve
 ```
 
-The service listens on port `8080` by default and exposes REST endpoints for authentication, friend management, video sharing, and feed retrieval. Logs indicate when migrations and dependency checks succeed.
+The service listens on port `8080` by default and exposes REST endpoints for authentication, friend management, video sharing, and
+feed retrieval. Logs indicate when migrations and dependency checks succeed. Expect non-critical routes (like password reset) to
+respond with placeholder behavior until their integrations are completed.
 
 ### 4.4 Start the React frontend
 
@@ -141,22 +151,29 @@ touch .env.local  # ensure the file exists, then edit as needed
 pnpm dev       # or npm run dev
 ```
 
-By default the development server runs on `http://localhost:5173`. It proxies API requests to the Go backend using `VITE_API_BASE_URL`.
+By default the development server runs on `http://localhost:5173`. It proxies API requests to the Go backend using
+`VITE_API_BASE_URL`. Leave `VITE_USE_MOCKS=true` (and `VITE_USE_MOCK_DATA=true`) if you want dashboards and invites to render without depending on the unfinished
+backend.
 
 ### 4.5 Verify the stack
 
-1. Visit `http://localhost:5173` and sign up for a new account.
-2. Add a friend using their username or email.
-3. Share a video link to confirm yt-dlp metadata retrieval and download-to-storage workflow.
-4. Check the "Feed" tab to ensure shared videos appear.
+1. Visit `http://localhost:5173` and sign up for a new account. (If the backend rejects the request, fall back to the mock user
+   toggle and record the issue.)
+2. Add a friend using their username or email. The UI will currently use mock data when the API returns errors.
+3. Share a video link to confirm yt-dlp metadata retrieval. Downloads are skipped for now, but metadata lookups should succeed
+   when `yt-dlp` is available.
+4. Check the "Feed" tab to ensure shared videos appear. Expect placeholder content until real friendships and shares exist in the
+   database.
 
-The backend logs should show API traffic and share fan-out operations, while the database should record new users, sessions, and shares.
+The backend logs should show API traffic, even if some handlers return TODO responses. Track unexpected failures in the roadmap so
+they can be prioritized.
 
 ---
 
 ## 5. Docker Compose workflow
 
-The repository ships with `deploy/docker-compose.yml` to orchestrate the services. Environment values are pulled from `deploy/.env` and the `.env` files in the backend/frontend directories.
+The repository ships with `deploy/docker-compose.yml` to orchestrate the services. Environment values are pulled from `deploy/.env`
+and the `.env` files in the backend/frontend directories.
 
 ### 5.1 Build and start containers
 
@@ -167,18 +184,21 @@ cp .env.example .env  # if you haven't already
 docker compose up --build --remove-orphans
 ```
 
-This command launches the following containers:
+This command launches the following containers (some provide scaffolding only and are not yet wired for production workloads):
 
 - `db` – PostgreSQL with initialized databases and volumes for persistence.
-- `backend` – Go API service running `go run ./cmd/vidfriends serve` with the repo mounted as a volume.
-- `frontend` – React dev server served via Vite.
-- `minio` – S3-compatible object storage that holds processed video assets.
+- `backend` – Go API service running `go run ./cmd/vidfriends serve` with the repo mounted as a volume. Uses mocks for yt-dlp
+  downloads until the ingestion pipeline lands.
+- `frontend` – React dev server served via Vite. Enable mocks via `.env.local` to avoid errors while backend features remain in
+  flight.
+- `minio` – S3-compatible object storage that holds processed video assets. Ingestion is stubbed, so expect empty buckets.
 - `yt-dlp` – helper image that copies the `yt-dlp` binary onto a shared volume.
 - `createbuckets` – one-time MinIO client job that provisions the public bucket defined in `.env`.
 
-Wait until the logs show the API listening, the bucket provisioning job exiting successfully, and PostgreSQL reporting healthy.
-The frontend is accessible at `http://localhost:5173`, the API at `http://localhost:8080`, and the object storage browser at
-`http://localhost:9001`.
+Wait until the logs show the API listening, the bucket provisioning job exiting successfully, and PostgreSQL reporting healthy. The
+frontend is accessible at `http://localhost:5173`, the API at `http://localhost:8080`, and the object storage browser at
+`http://localhost:9001`. Because MinIO and yt-dlp are not yet hooked into an ingestion workflow, you can ignore warnings from those
+containers during early development.
 
 ### 5.2 Running commands inside containers
 
@@ -199,69 +219,5 @@ docker compose down -v        # stop and remove volumes (wipes the database)
 
 ---
 
-## 6. Testing and linting
-
-Run the automated checks before submitting a pull request.
-
-```bash
-cd backend
-go test ./...
-# Optional linters if golangci-lint is installed
-golangci-lint run
-
-cd ../frontend
-pnpm test
-pnpm lint
-```
-
-These commands ensure the Go API, React frontend, and TypeScript sources compile and pass their respective test suites.
-
----
-
-## 7. Troubleshooting
-
-The matrix below captures the issues we see most often and how to recover from them. Many fixes involve re-reading the `.env`
-files for typos or missing values, so start there before digging into deeper debugging.
-
-| Symptom | Likely cause | Suggested fix |
-| ------- | ------------ | ------------- |
-| API fails to start with `pq: password authentication failed` | Incorrect database credentials | Double-check `DATABASE_URL` and PostgreSQL role configuration. |
-| Go API exits with `dial tcp 127.0.0.1:5432: connect: connection refused` | PostgreSQL server is not running or listening on a different port | Start PostgreSQL (`brew services start postgresql` / `systemctl start postgresql`) and confirm the port matches `DATABASE_URL`. |
-| `go run ./cmd/vidfriends serve` reloads repeatedly in Docker | The source tree is mounted with root-owned files, causing `air` to fail watching | Run `sudo chown -R $(id -u):$(id -g) .` inside the repo or adjust the bind mount user in `docker-compose.yml`. |
-| `yt-dlp` errors when fetching metadata or downloading files | Missing binary, insufficient disk space, or rate-limiting | Install `yt-dlp` locally, ensure the storage volume has capacity, or set `YT_DLP_PATH` to a bundled binary. Wait/retry if the provider is rate-limiting. |
-| `pnpm install` fails with "unsupported engine" | Your Node.js runtime is older than the minimum version | Upgrade Node.js to the current LTS release (18+) and re-run `pnpm install`. |
-| CORS errors in the browser console | Frontend origin not in backend `CORS_ALLOWED_ORIGINS` | Update the backend `.env` to include the frontend dev origin. |
-| Session cookie missing in requests | Browser blocked third-party cookies or secure flag mismatch | Use the same domain/port in development and ensure `SESSION_SECURE=false` for HTTP. |
-| Frontend shows blank screen with Vite `ERR_NETWORK` errors | `VITE_API_BASE_URL` points to the wrong host/port | Confirm the API is reachable from the browser and update `frontend/.env.local` (for Docker ensure you use the host machine IP). |
-| `docker compose up` exits immediately | Ports already in use | Stop conflicting services or change the exposed ports in the compose file. |
-
-### 7.1 Logs and diagnostics
-
-- **Backend logs:** Run `go run ./cmd/vidfriends serve --log-level debug` (or `docker compose logs -f backend`) to view detailed
-  request traces and configuration warnings.
-- **Database connectivity:** `psql $DATABASE_URL -c '\dt'` verifies the service can reach PostgreSQL and that migrations have
-  been applied.
-- **Frontend diagnostics:** Open the browser dev tools console and network tab to confirm the API responses and CORS headers
-  match your expectations.
-- **Docker environment:** `docker compose ps` shows container status, and `docker compose exec backend env` can be used to
-  inspect environment variables inside the running service.
-
-### 7.2 When all else fails
-
-- Rebuild containers without cache: `docker compose build --no-cache` followed by `docker compose up`.
-- Remove dangling volumes when schema drift causes migration failures: `docker compose down -v` (this wipes the local
-  database).
-- Delete and recreate `.env` files from the provided `.example` templates to ensure no stale keys remain.
-- Ask for help in the project chat with the exact command, full log output, and details about your OS, CPU, and tooling
-  versions.
-
----
-
-## 8. Next steps
-
-- Review the API documentation in `backend/docs/openapi.yaml` (generated via `swag init`).
-- Update the sample `.env.example` files when configuration options change.
-- Consider adding `make` targets for the most common tasks (e.g., `make dev`, `make test`).
-
-If you run into issues not covered here, open a GitHub issue with details about your environment, the commands you ran, and any error output.
-
+Following these steps gets you a working development environment with realistic expectations about what is still a work in
+progress. As endpoints stabilize you can disable the mock layers and tighten the verification checklist.

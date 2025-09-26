@@ -51,14 +51,14 @@ state to the feature set described in the documentation.
       reducer logic.
 
 ## Documentation
-- [ ] Update the README and startup guides to reflect the current implementation
+- [x] Update the README and startup guides to reflect the current implementation
       status (e.g. mock data, incomplete endpoints) so new contributors know what
       to expect.
-- [ ] Add an API reference that documents available endpoints, request/response
+- [x] Add an API reference that documents available endpoints, request/response
       bodies, and authentication requirements.
-- [ ] Document environment variable defaults for both services in a single
+- [x] Document environment variable defaults for both services in a single
       location to reduce duplication between guides.
-- [ ] Remove or revise claims about integrated auth/friendship/video features
+- [x] Remove or revise claims about integrated auth/friendship/video features
       until the backend endpoints and frontend wiring exist.
-- [ ] Clarify setup guides so commands like `go run ./cmd/vidfriends migrate`
+- [x] Clarify setup guides so commands like `go run ./cmd/vidfriends migrate`
       explain their current limitations or are updated once the CLI works.
