@@ -30,7 +30,16 @@ type VideoShare struct {
 	Description string
 	Thumbnail   string
 	CreatedAt   time.Time
+	AssetURL    string
+	AssetStatus string
+	AssetSize   int64
 }
+
+const (
+	AssetStatusPending = "pending"
+	AssetStatusReady   = "ready"
+	AssetStatusFailed  = "failed"
+)
 
 // SessionTokens groups the bearer credentials issued to authenticated users.
 type SessionTokens struct {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/vidfriends/backend/internal/db"
 	"github.com/vidfriends/backend/internal/models"
+	"github.com/vidfriends/backend/internal/videos"
 )
 
 // PostgresUserRepository provides PostgreSQL-backed persistence for users.
@@ -230,10 +232,15 @@ func (r *PostgresVideoRepository) Create(ctx context.Context, share models.Video
 	}
 	defer conn.Release()
 
+	status := share.AssetStatus
+	if strings.TrimSpace(status) == "" {
+		status = models.AssetStatusPending
+	}
+
 	_, err = conn.Exec(ctx, `
-        INSERT INTO video_shares (id, owner_id, url, title, description, thumbnail, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, share.ID, share.OwnerID, share.URL, share.Title, share.Description, share.Thumbnail, share.CreatedAt)
+        INSERT INTO video_shares (id, owner_id, url, title, description, thumbnail, created_at, asset_status, asset_url, asset_size)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `, share.ID, share.OwnerID, share.URL, share.Title, share.Description, share.Thumbnail, share.CreatedAt, status, share.AssetURL, share.AssetSize)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -264,7 +271,7 @@ func (r *PostgresVideoRepository) ListFeed(ctx context.Context, userID string) (
             WHERE fr.status = 'accepted'
               AND (fr.requester_id = $1 OR fr.receiver_id = $1)
         )
-        SELECT id, owner_id, url, title, description, thumbnail, created_at
+        SELECT id, owner_id, url, title, description, thumbnail, created_at, asset_url, asset_status, asset_size
         FROM video_shares
         WHERE owner_id = $1 OR owner_id IN (SELECT friend_id FROM accepted_friends)
         ORDER BY created_at DESC
@@ -278,7 +285,7 @@ func (r *PostgresVideoRepository) ListFeed(ctx context.Context, userID string) (
 	var shares []models.VideoShare
 	for rows.Next() {
 		var share models.VideoShare
-		if err := rows.Scan(&share.ID, &share.OwnerID, &share.URL, &share.Title, &share.Description, &share.Thumbnail, &share.CreatedAt); err != nil {
+		if err := rows.Scan(&share.ID, &share.OwnerID, &share.URL, &share.Title, &share.Description, &share.Thumbnail, &share.CreatedAt, &share.AssetURL, &share.AssetStatus, &share.AssetSize); err != nil {
 			return nil, fmt.Errorf("scan video share: %w", err)
 		}
 		shares = append(shares, share)
@@ -291,6 +298,59 @@ func (r *PostgresVideoRepository) ListFeed(ctx context.Context, userID string) (
 	return shares, nil
 }
 
+// MarkAssetReady updates a share's asset metadata after successful ingestion.
+func (r *PostgresVideoRepository) MarkAssetReady(ctx context.Context, shareID, location string, size int64) error {
+	conn, err := r.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire connection: %w", err)
+	}
+	defer conn.Release()
+
+	tag, err := conn.Exec(ctx, `
+        UPDATE video_shares
+        SET asset_status = $2,
+            asset_url = $3,
+            asset_size = $4
+        WHERE id = $1
+    `, shareID, models.AssetStatusReady, location, size)
+	if err != nil {
+		return fmt.Errorf("update video asset status ready: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// MarkAssetFailed records a failed ingestion attempt for the provided share.
+func (r *PostgresVideoRepository) MarkAssetFailed(ctx context.Context, shareID string) error {
+	conn, err := r.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire connection: %w", err)
+	}
+	defer conn.Release()
+
+	tag, err := conn.Exec(ctx, `
+        UPDATE video_shares
+        SET asset_status = $2,
+            asset_url = '',
+            asset_size = 0
+        WHERE id = $1
+    `, shareID, models.AssetStatusFailed)
+	if err != nil {
+		return fmt.Errorf("update video asset status failed: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
 var _ UserRepository = (*PostgresUserRepository)(nil)
 var _ FriendRepository = (*PostgresFriendRepository)(nil)
 var _ VideoRepository = (*PostgresVideoRepository)(nil)
+var _ videos.ShareAssetUpdater = (*PostgresVideoRepository)(nil)

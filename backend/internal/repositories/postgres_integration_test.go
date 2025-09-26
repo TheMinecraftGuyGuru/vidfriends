@@ -293,32 +293,36 @@ func TestPostgresVideoRepository_ListFeed(t *testing.T) {
 
 	baseTime := time.Now().UTC().Add(-30 * time.Minute)
 	ownShare := models.VideoShare{
-		ID:        uuid.NewString(),
-		OwnerID:   viewer.ID,
-		URL:       "https://example.com/own",
-		Title:     "Viewer Share",
-		CreatedAt: baseTime.Add(2 * time.Minute),
+		ID:          uuid.NewString(),
+		OwnerID:     viewer.ID,
+		URL:         "https://example.com/own",
+		Title:       "Viewer Share",
+		CreatedAt:   baseTime.Add(2 * time.Minute),
+		AssetStatus: models.AssetStatusPending,
 	}
 	acceptedShare := models.VideoShare{
-		ID:        uuid.NewString(),
-		OwnerID:   acceptedFriend.ID,
-		URL:       "https://example.com/accepted",
-		Title:     "Accepted Share",
-		CreatedAt: baseTime.Add(5 * time.Minute),
+		ID:          uuid.NewString(),
+		OwnerID:     acceptedFriend.ID,
+		URL:         "https://example.com/accepted",
+		Title:       "Accepted Share",
+		CreatedAt:   baseTime.Add(5 * time.Minute),
+		AssetStatus: models.AssetStatusPending,
 	}
 	pendingShare := models.VideoShare{
-		ID:        uuid.NewString(),
-		OwnerID:   pendingFriend.ID,
-		URL:       "https://example.com/pending",
-		Title:     "Pending Share",
-		CreatedAt: baseTime.Add(10 * time.Minute),
+		ID:          uuid.NewString(),
+		OwnerID:     pendingFriend.ID,
+		URL:         "https://example.com/pending",
+		Title:       "Pending Share",
+		CreatedAt:   baseTime.Add(10 * time.Minute),
+		AssetStatus: models.AssetStatusPending,
 	}
 	strangerShare := models.VideoShare{
-		ID:        uuid.NewString(),
-		OwnerID:   stranger.ID,
-		URL:       "https://example.com/stranger",
-		Title:     "Stranger Share",
-		CreatedAt: baseTime.Add(15 * time.Minute),
+		ID:          uuid.NewString(),
+		OwnerID:     stranger.ID,
+		URL:         "https://example.com/stranger",
+		Title:       "Stranger Share",
+		CreatedAt:   baseTime.Add(15 * time.Minute),
+		AssetStatus: models.AssetStatusPending,
 	}
 
 	for _, share := range []models.VideoShare{ownShare, acceptedShare, pendingShare, strangerShare} {
@@ -343,6 +347,9 @@ func TestPostgresVideoRepository_ListFeed(t *testing.T) {
 	for _, share := range feed {
 		if share.OwnerID == pendingFriend.ID || share.OwnerID == stranger.ID {
 			t.Fatalf("unexpected share from owner %s in feed", share.OwnerID)
+		}
+		if share.AssetStatus == "" {
+			t.Fatalf("expected asset status to be populated for share %s", share.ID)
 		}
 	}
 }

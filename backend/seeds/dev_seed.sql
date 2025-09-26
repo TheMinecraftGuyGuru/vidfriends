@@ -18,19 +18,25 @@ INSERT INTO friend_requests (id, requester_id, receiver_id, status, created_at, 
 ON CONFLICT (id) DO NOTHING;
 
 -- Video shares
-INSERT INTO video_shares (id, owner_id, url, title, description, thumbnail, created_at) VALUES
+INSERT INTO video_shares (id, owner_id, url, title, description, thumbnail, created_at, asset_status, asset_url, asset_size) VALUES
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', '11111111-1111-1111-1111-111111111111',
    'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
    'An 80s classic',
    'Sample share for local testing. Replace with your own links as needed.',
    'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
-   NOW() - INTERVAL '2 days'),
+   NOW() - INTERVAL '2 days',
+   'ready',
+   'http://localhost:9000/vidfriends/dev/c_ccccccccccccccccccccccccc.mp4',
+   123456789),
   ('dddddddd-dddd-dddd-dddd-dddddddddddd', '22222222-2222-2222-2222-222222222222',
    'https://vimeo.com/148751763',
    'Creative inspiration',
    'Another seeded video share to exercise metadata lookups.',
    NULL,
-   NOW() - INTERVAL '12 hours')
+   NOW() - INTERVAL '12 hours',
+   'pending',
+   '',
+   0)
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
