@@ -21,7 +21,7 @@ MVP. Items are grouped roughly in the order they should be tackled; update the l
 ## Cross-cutting concerns
 
 - [x] Document end-to-end manual test cases that verify signup, login, friend invites, and sharing flows.
-- [ ] Expand automated test coverage: backend integration tests against PostgreSQL, frontend Vitest + React Testing Library suites.
+- [x] Expand automated test coverage: backend integration tests against PostgreSQL, frontend Vitest + React Testing Library suites.
 - [ ] Set up CI workflows that run Go tests, frontend tests, linting, and type checks on every pull request.
 - [ ] Establish staging Docker images (backend + frontend) published from main to exercise deployment paths.
 
