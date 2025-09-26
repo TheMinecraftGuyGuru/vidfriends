@@ -20,9 +20,10 @@ import (
 
 // AuthHandler implements user authentication endpoints.
 type AuthHandler struct {
-	Users    UserStore
-	Sessions SessionManager
-	NowFunc  func() time.Time
+	Users       UserStore
+	Sessions    SessionManager
+	NowFunc     func() time.Time
+	RateLimiter RateLimiter
 }
 
 // Login handles POST /api/v1/auth/login requests.
@@ -35,6 +36,12 @@ func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !allowRequest(h.RateLimiter, r, "auth:login") {
+		logger.Warn("rate limit exceeded", "scope", "auth:login")
+		respondJSON(ctx, w, http.StatusTooManyRequests, map[string]string{"error": "too many login attempts"})
 		return
 	}
 
@@ -55,6 +62,18 @@ func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if req.Email == "" || req.Password == "" {
 		logger.Warn("login missing credentials", "email", req.Email)
 		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "email and password are required"})
+		return
+	}
+
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		logger.Warn("login invalid email", "email", req.Email, "error", err)
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid email address"})
+		return
+	}
+
+	if len(req.Password) < 8 || len(req.Password) > 72 {
+		logger.Warn("login password length invalid", "email", req.Email, "length", len(req.Password))
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "password must be between 8 and 72 characters"})
 		return
 	}
 
@@ -94,6 +113,12 @@ func (h AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !allowRequest(h.RateLimiter, r, "auth:signup") {
+		logger.Warn("rate limit exceeded", "scope", "auth:signup")
+		respondJSON(ctx, w, http.StatusTooManyRequests, map[string]string{"error": "too many signup attempts"})
+		return
+	}
+
 	if h.Users == nil || h.Sessions == nil {
 		logger.Error("authentication dependencies unavailable", "hasUsers", h.Users != nil, "hasSessions", h.Sessions != nil)
 		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "authentication services unavailable"})
@@ -120,9 +145,9 @@ func (h AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Password) < 8 {
-		logger.Warn("signup password too short", "email", req.Email)
-		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
+	if len(req.Password) < 8 || len(req.Password) > 72 {
+		logger.Warn("signup password length invalid", "email", req.Email, "length", len(req.Password))
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "password must be between 8 and 72 characters"})
 		return
 	}
 
@@ -186,6 +211,12 @@ func (h AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !allowRequest(h.RateLimiter, r, "auth:refresh") {
+		logger.Warn("rate limit exceeded", "scope", "auth:refresh")
+		respondJSON(ctx, w, http.StatusTooManyRequests, map[string]string{"error": "too many refresh attempts"})
+		return
+	}
+
 	if h.Sessions == nil {
 		logger.Error("session manager unavailable")
 		respondJSON(ctx, w, http.StatusInternalServerError, map[string]string{"error": "session service unavailable"})
@@ -203,6 +234,12 @@ func (h AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if req.RefreshToken == "" {
 		logger.Warn("missing refresh token")
 		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "refresh token is required"})
+		return
+	}
+
+	if len(req.RefreshToken) > 512 {
+		logger.Warn("refresh token too long", "length", len(req.RefreshToken))
+		respondJSON(ctx, w, http.StatusBadRequest, map[string]string{"error": "invalid refresh token"})
 		return
 	}
 
@@ -232,6 +269,12 @@ func (h AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request
 	if r.Method != http.MethodPost {
 		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !allowRequest(h.RateLimiter, r, "auth:password-reset") {
+		logger.Warn("rate limit exceeded", "scope", "auth:password-reset")
+		respondJSON(ctx, w, http.StatusTooManyRequests, map[string]string{"error": "too many password reset attempts"})
 		return
 	}
 
