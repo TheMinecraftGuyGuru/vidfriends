@@ -11,7 +11,6 @@ import {
 
 const SESSION_STORAGE_KEY = 'vidfriends.session';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
-const USE_MOCK_DATA = String(import.meta.env.VITE_USE_MOCK_DATA ?? '').toLowerCase() === 'true';
 
 class ApiError extends Error {
   status: number;
@@ -76,13 +75,18 @@ async function getJSON<T>(path: string, tokens: SessionTokens | null): Promise<T
   return (payload as T) ?? (undefined as T);
 }
 
-async function postJSON<T>(path: string, body: unknown): Promise<T> {
+async function postJSON<T>(path: string, body: unknown, tokens?: SessionTokens | null): Promise<T> {
   let response: Response;
   try {
     response = await fetch(buildURL(path), {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(tokens?.accessToken
+          ? {
+              Authorization: `Bearer ${tokens.accessToken}`
+            }
+          : {})
       },
       body: JSON.stringify(body)
     });
@@ -262,71 +266,6 @@ export type AppStateAction =
       payload: { pending: FriendInvite[]; connections: FriendConnection[] };
     }
   | { type: 'set-feed'; payload: FeedEntry[] };
-
-const mockFriendsState: { pending: FriendInvite[]; connections: FriendConnection[] } = {
-  pending: [
-    { id: 'inv-1', displayName: 'Sasha Rivers', mutualFriends: 4 },
-    { id: 'inv-2', displayName: 'Miguel Chen', mutualFriends: 2 }
-  ],
-  connections: [
-    { id: 'friend-1', displayName: 'Rowan Carter', status: 'online' },
-    { id: 'friend-2', displayName: 'Priya Das', status: 'away' }
-  ]
-};
-
-const mockFeedEntries: FeedEntry[] = [
-  {
-    id: 'feed-1',
-    title: 'Top 10 Cozy Indie Games',
-    sharedBy: 'Rowan Carter',
-    sharedAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-    platform: 'YouTube',
-    url: 'https://www.youtube.com/watch?v=I6-hm4DYPwU',
-    thumbnailUrl: 'https://i.ytimg.com/vi/I6-hm4DYPwU/hqdefault.jpg',
-    channelName: 'Indie Realm',
-    durationSeconds: 972,
-    viewCount: 48200,
-    description:
-      'Discover new cozy titles perfect for winding down after a long day. This curated list covers hidden gems, heartfelt stories, and soundtracks you will want on repeat.',
-    tags: ['Games', 'Cozy', 'Indie'],
-    reactions: { like: 18, love: 6, wow: 2, laugh: 1 },
-    userReaction: null
-  },
-  {
-    id: 'feed-2',
-    title: 'Morning Flow Yoga for Beginners',
-    sharedBy: 'Priya Das',
-    sharedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    platform: 'YouTube',
-    url: 'https://www.youtube.com/watch?v=u5o593sW9DQ',
-    thumbnailUrl: 'https://i.ytimg.com/vi/u5o593sW9DQ/hqdefault.jpg',
-    channelName: 'Peaceful Moves',
-    durationSeconds: 1803,
-    viewCount: 91500,
-    description:
-      'A gentle yoga flow designed to wake up the body and focus the mind. No equipment required—perfect for easing into the day.',
-    tags: ['Wellness', 'Mindfulness', 'Beginner Friendly'],
-    reactions: { like: 12, love: 9, wow: 1, laugh: 0 },
-    userReaction: 'love'
-  },
-  {
-    id: 'feed-3',
-    title: 'How the JWST Sees the Universe',
-    sharedBy: 'Miguel Chen',
-    sharedAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
-    platform: 'Nebula',
-    url: 'https://nebula.tv/videos/space-jwst',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1200&q=80',
-    channelName: 'Cosmic Perspectives',
-    durationSeconds: 1245,
-    viewCount: 38700,
-    description:
-      'Astrophysicist Dr. Mei Park breaks down the science behind the James Webb Space Telescope and what its discoveries mean for our understanding of deep space.',
-    tags: ['Science', 'Space', 'Documentary'],
-    reactions: { like: 21, love: 11, wow: 7, laugh: 0 },
-    userReaction: null
-  }
-];
 
 const emptyAppState: AppState = {
   auth: {
@@ -525,13 +464,6 @@ interface RawVideoShare {
   CreatedAt?: string;
 }
 
-function shouldUseMockLayer() {
-  if (USE_MOCK_DATA) {
-    return true;
-  }
-  return !API_BASE_URL;
-}
-
 async function loadFriendsFromApi(userId: string, tokens: SessionTokens | null) {
   const query = new URLSearchParams({ user: userId });
   const response = await getJSON<{ requests: RawFriendRequest[] }>(`/api/v1/friends?${query.toString()}`, tokens);
@@ -596,25 +528,11 @@ async function loadFeedFromApi(userId: string, tokens: SessionTokens | null) {
   });
 }
 
-function loadFriendsFromMock() {
-  return {
-    pending: mockFriendsState.pending.map((invite) => ({ ...invite })),
-    connections: mockFriendsState.connections.map((friend) => ({ ...friend }))
-  };
-}
-
-function loadFeedFromMock() {
-  return mockFeedEntries.map((entry) => ({ ...entry }));
-}
-
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState, initializeState);
   const refreshInFlight = useRef(false);
 
   const refreshSession = useCallback(async () => {
-    if (shouldUseMockLayer()) {
-      return;
-    }
     if (refreshInFlight.current) {
       return;
     }
@@ -655,10 +573,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [dispatch, state.auth.tokens, state.auth.user]);
 
   useEffect(() => {
-    if (shouldUseMockLayer()) {
-      return;
-    }
-
     const tokens = state.auth.tokens;
     if (!tokens) {
       return;
@@ -688,10 +602,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    const usingMock = shouldUseMockLayer();
-    const activeUserId = state.auth.user?.id ?? (usingMock ? 'mock-user' : '');
+    const activeUserId = state.auth.user?.id ?? '';
+    const tokens = state.auth.tokens;
 
-    if (!activeUserId) {
+    if (!activeUserId || !tokens) {
       dispatch({ type: 'set-friends', payload: { pending: [], connections: [] } });
       dispatch({ type: 'set-feed', payload: [] });
       return () => {
@@ -701,12 +615,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     async function loadData() {
       try {
-        const [friends, feed] = usingMock
-          ? [loadFriendsFromMock(), loadFeedFromMock()]
-          : await Promise.all([
-              loadFriendsFromApi(activeUserId, state.auth.tokens),
-              loadFeedFromApi(activeUserId, state.auth.tokens)
-            ]);
+        const [friends, feed] = await Promise.all([
+          loadFriendsFromApi(activeUserId, tokens),
+          loadFeedFromApi(activeUserId, tokens)
+        ]);
 
         if (!cancelled) {
           dispatch({ type: 'set-friends', payload: friends });
@@ -714,8 +626,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         if (!cancelled) {
-          dispatch({ type: 'set-friends', payload: loadFriendsFromMock() });
-          dispatch({ type: 'set-feed', payload: loadFeedFromMock() });
+          if (error instanceof ApiError && error.status === 401) {
+            clearStoredSession();
+            dispatch({ type: 'sign-out' });
+          } else {
+            dispatch({ type: 'set-friends', payload: { pending: [], connections: [] } });
+            dispatch({ type: 'set-feed', payload: [] });
+          }
         }
         console.error('Failed to load VidFriends data', error);
       }
@@ -834,16 +751,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'resolve-invite', payload: { inviteId, accepted } });
 
       try {
-        if (API_BASE_URL) {
-          await postJSON('/api/v1/friends/respond', {
+        const tokens = state.auth.tokens;
+        if (!tokens) {
+          throw new Error('Your session has expired. Please sign in again.');
+        }
+
+        await postJSON(
+          '/api/v1/friends/respond',
+          {
             requestId: inviteId,
             action: accepted ? 'accept' : 'block'
-          });
-        } else {
-          await new Promise((resolve) => {
-            setTimeout(resolve, 400);
-          });
-        }
+          },
+          tokens
+        );
       } catch (error) {
         dispatch({ type: 'set-friends', payload: previousFriendsState });
 
@@ -855,7 +775,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           : new Error('Unable to update the invitation at this time. Please try again.');
       }
     },
-    [state.friends.connections, state.friends.pending]
+    [state.auth.tokens, state.friends.connections, state.friends.pending]
   );
 
   const shareVideo = useCallback<AppStateContextValue['shareVideo']>(
@@ -896,29 +816,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         } satisfies FeedEntry;
       };
 
-      if (shouldUseMockLayer()) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        const mockEntry = buildFeedEntry({
-          id: `feed-${Date.now()}`,
-          url: sanitizedUrl,
-          title: fallbackTitle,
-          description: `Shared by ${ownerDisplayName}: ${fallbackTitle}.`
-        });
-        dispatch({ type: 'share-video', payload: mockEntry });
-        return mockEntry;
-      }
-
       const ownerId = state.auth.user?.id;
-      if (!ownerId) {
+      const tokens = state.auth.tokens;
+      if (!ownerId || !tokens) {
         throw new Error('You need to be signed in to share a video.');
       }
 
       let response: { share: RawVideoShare };
       try {
-        response = await postJSON<{ share: RawVideoShare }>('/api/v1/videos', {
-          ownerId,
-          url: sanitizedUrl
-        });
+        response = await postJSON<{ share: RawVideoShare }>(
+          '/api/v1/videos',
+          {
+            ownerId,
+            url: sanitizedUrl
+          },
+          tokens
+        );
       } catch (error) {
         if (error instanceof Error) {
           throw error;
@@ -938,7 +851,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'share-video', payload: persistedEntry });
       return persistedEntry;
     },
-    [state.auth.user?.displayName, state.auth.user?.id]
+    [state.auth.tokens, state.auth.user?.displayName, state.auth.user?.id]
   );
 
   const reactToVideo = useCallback<AppStateContextValue['reactToVideo']>(

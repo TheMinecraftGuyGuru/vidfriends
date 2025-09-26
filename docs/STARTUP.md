@@ -8,8 +8,9 @@ steps below call out known limitations to help you plan your testing strategy.
 2. **Docker Compose** – start the entire stack with containers and minimal host dependencies.
 
 Use whichever method best matches your workflow. The Docker Compose path is usually fastest for first-time contributors, while
-the local toolchain workflow makes iterative backend/frontend development easier. Expect to lean on the frontend mock mode
-(`VITE_USE_MOCKS=true` and `VITE_USE_MOCK_DATA=true`) until more API endpoints are production-ready.
+the local toolchain workflow makes iterative backend/frontend development easier. Keep `VITE_USE_MOCKS=true` if you want
+components that do not yet have APIs to render placeholder content, but note that the global app state now always talks to the
+real backend.
 
 ---
 
@@ -81,9 +82,8 @@ Update the copied files with values that match your environment. At a minimum yo
 - `YT_DLP_PATH` – optional path to the `yt-dlp` binary if it is not on `$PATH`. Metadata lookups fall back to mock data if the
   binary is missing.
 - `VITE_API_BASE_URL` – API origin for the frontend (`http://localhost:8080` in
-  local development). When pointing at a partially implemented backend, set `VITE_USE_MOCKS=true` (and `VITE_USE_MOCK_DATA=true`) to avoid broken requests.
-- `VITE_USE_MOCKS` – toggle the frontend's mock service layer (`false` by default, but `true` is recommended until the API
-  stabilizes). Some components also look for `VITE_USE_MOCK_DATA`; keep both flags in sync for now.
+  local development). The AppStateProvider always uses this endpoint for authentication, friends, and feed data.
+- `VITE_USE_MOCKS` – toggle the remaining mock service layer (`false` by default). Set this to `true` when you need placeholder content for features without finished APIs.
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` – credentials the
   Docker Compose workflow applies to the PostgreSQL container.
 - `BACKEND_PORT` / `FRONTEND_PORT` – override ports exposed by Docker Compose if
@@ -152,18 +152,18 @@ pnpm dev       # or npm run dev
 ```
 
 By default the development server runs on `http://localhost:5173`. It proxies API requests to the Go backend using
-`VITE_API_BASE_URL`. Leave `VITE_USE_MOCKS=true` (and `VITE_USE_MOCK_DATA=true`) if you want dashboards and invites to render without depending on the unfinished
-backend.
+`VITE_API_BASE_URL`. Ensure the backend is running; otherwise authentication, friends, and feed views will surface empty
+states. You can still enable `VITE_USE_MOCKS=true` to stub out components that lack endpoints.
 
 ### 4.5 Verify the stack
 
-1. Visit `http://localhost:5173` and sign up for a new account. (If the backend rejects the request, fall back to the mock user
-   toggle and record the issue.)
-2. Add a friend using their username or email. The UI will currently use mock data when the API returns errors.
+1. Visit `http://localhost:5173` and sign up for a new account. If anything fails, file an issue rather than switching back to
+   the legacy mock data.
+2. Add a friend using their username or email and respond to invitations. The UI now mirrors the backend state instead of local
+   fixtures.
 3. Share a video link to confirm yt-dlp metadata retrieval. Downloads are skipped for now, but metadata lookups should succeed
    when `yt-dlp` is available.
-4. Check the "Feed" tab to ensure shared videos appear. Expect placeholder content until real friendships and shares exist in the
-   database.
+4. Check the "Feed" tab to ensure shared videos appear for your account.
 
 The backend logs should show API traffic, even if some handlers return TODO responses. Track unexpected failures in the roadmap so
 they can be prioritized.
