@@ -27,13 +27,16 @@ type AuthHandler struct {
 
 // Login handles POST /api/v1/auth/login requests.
 func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "AuthHandler.Login")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodPost {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Users == nil || h.Sessions == nil {
 		logger.Error("authentication dependencies unavailable", "hasUsers", h.Users != nil, "hasSessions", h.Sessions != nil)
@@ -80,13 +83,16 @@ func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // SignUp handles POST /api/v1/auth/signup requests.
 func (h AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "AuthHandler.SignUp")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodPost {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Users == nil || h.Sessions == nil {
 		logger.Error("authentication dependencies unavailable", "hasUsers", h.Users != nil, "hasSessions", h.Sessions != nil)
@@ -169,13 +175,16 @@ func (h AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 
 // Refresh exchanges a refresh token for a new session.
 func (h AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "AuthHandler.Refresh")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodPost {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Sessions == nil {
 		logger.Error("session manager unavailable")
@@ -215,13 +224,16 @@ func (h AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 // RequestPasswordReset handles POST /api/v1/auth/password-reset requests.
 func (h AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "AuthHandler.RequestPasswordReset")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodPost {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Users == nil {
 		logger.Error("user store unavailable")

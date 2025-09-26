@@ -25,13 +25,16 @@ type VideoHandler struct {
 
 // Create handles POST /api/v1/videos.
 func (h VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "VideoHandler.Create")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodPost {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Videos == nil || h.Metadata == nil {
 		logger.Error("video services unavailable", "hasVideos", h.Videos != nil, "hasMetadata", h.Metadata != nil)
@@ -97,13 +100,16 @@ func (h VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Feed handles GET /api/v1/videos/feed.
 func (h VideoHandler) Feed(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "VideoHandler.Feed")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodGet {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Videos == nil {
 		logger.Error("video service unavailable")

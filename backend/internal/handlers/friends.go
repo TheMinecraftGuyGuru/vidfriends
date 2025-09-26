@@ -28,13 +28,16 @@ type FriendHandler struct {
 
 // Invite handles POST /api/v1/friends/invite.
 func (h FriendHandler) Invite(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "FriendHandler.Invite")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodPost {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Friends == nil {
 		logger.Error("friend service unavailable")
@@ -93,13 +96,16 @@ func (h FriendHandler) Invite(w http.ResponseWriter, r *http.Request) {
 
 // List handles GET /api/v1/friends requests.
 func (h FriendHandler) List(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "FriendHandler.List")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodGet {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Friends == nil {
 		logger.Error("friend service unavailable")
@@ -126,13 +132,16 @@ func (h FriendHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Respond handles POST /api/v1/friends/respond requests to accept or block invites.
 func (h FriendHandler) Respond(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "FriendHandler.Respond")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodPost {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := r.Context()
-	logger := logging.FromContext(ctx)
 
 	if h.Friends == nil {
 		logger.Error("friend service unavailable")

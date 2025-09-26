@@ -3,6 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/vidfriends/backend/internal/logging"
 )
 
 // HealthHandler responds with service health information.
@@ -10,7 +12,13 @@ type HealthHandler struct{}
 
 // Handle implements GET /healthz.
 func (HealthHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	ctx, span := logging.StartSpan(r.Context(), "HealthHandler.Handle")
+	defer span.End()
+	r = r.WithContext(ctx)
+
+	logger := logging.FromContext(ctx)
 	if r.Method != http.MethodGet {
+		logger.Warn("method not allowed", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -20,5 +28,7 @@ func (HealthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(payload)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		logger.Error("encode health response", "error", err)
+	}
 }
