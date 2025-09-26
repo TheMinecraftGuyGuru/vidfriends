@@ -20,6 +20,7 @@ import (
 type VideoHandler struct {
 	Videos   VideoStore
 	Metadata VideoMetadataProvider
+	Assets   VideoAssetIngestor
 	NowFunc  func() time.Time
 }
 
@@ -83,6 +84,7 @@ func (h VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description: metadata.Description,
 		Thumbnail:   metadata.Thumbnail,
 		CreatedAt:   now,
+		AssetStatus: models.AssetStatusPending,
 	}
 
 	if err := h.Videos.Create(ctx, share); err != nil {
@@ -93,6 +95,12 @@ func (h VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		logger.Error("failed to persist video share", "error", err, "ownerId", share.OwnerID, "url", share.URL)
 		respondJSON(ctx, w, status, map[string]string{"error": "failed to store video share"})
 		return
+	}
+
+	if h.Assets != nil {
+		if err := h.Assets.Enqueue(ctx, share); err != nil {
+			logger.Error("failed to enqueue asset ingestion", "error", err, "shareId", share.ID)
+		}
 	}
 
 	respondJSON(ctx, w, http.StatusCreated, createVideoResponse{Share: share})

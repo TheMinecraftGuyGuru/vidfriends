@@ -47,13 +47,27 @@ func (m metadataProviderStub) Lookup(ctx context.Context, url string) (videos.Me
 	return m.metadata, m.err
 }
 
+type assetIngestorStub struct {
+	share models.VideoShare
+	err   error
+}
+
+func (a *assetIngestorStub) Enqueue(ctx context.Context, share models.VideoShare) error {
+	_ = ctx
+	a.share = share
+	return a.err
+}
+
 func TestVideoHandlerCreateSuccess(t *testing.T) {
 	store := &videoStoreStub{}
 	metadata := metadataProviderStub{metadata: videos.Metadata{Title: "Test", Description: "Desc", Thumbnail: "thumb.jpg"}}
 
+	assets := &assetIngestorStub{}
+
 	handler := VideoHandler{
 		Videos:   store,
 		Metadata: metadata,
+		Assets:   assets,
 		NowFunc: func() time.Time {
 			return time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC)
 		},
@@ -82,8 +96,15 @@ func TestVideoHandlerCreateSuccess(t *testing.T) {
 	if store.share.OwnerID != "user-123" || store.share.URL != "https://example.com/watch?v=123" {
 		t.Fatalf("unexpected share data: %+v", store.share)
 	}
+	if store.share.AssetStatus != models.AssetStatusPending {
+		t.Fatalf("expected pending asset status, got %s", store.share.AssetStatus)
+	}
 	if !store.share.CreatedAt.Equal(time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC)) {
 		t.Fatalf("unexpected created at: %v", store.share.CreatedAt)
+	}
+
+	if assets.share.ID != store.share.ID {
+		t.Fatalf("expected asset job to receive share %s, got %s", store.share.ID, assets.share.ID)
 	}
 
 	var resp createVideoResponse

@@ -24,9 +24,24 @@ func TestBuildDependencies(t *testing.T) {
 		YTDLPPath:        "yt-dlp",
 		YTDLPTimeout:     time.Second,
 		MetadataCacheTTL: time.Minute,
+		ObjectStore:      config.ObjectStoreConfig{Bucket: "test-bucket", Endpoint: "http://localhost:9000", Region: "us-east-1"},
 	}
 
-	deps := buildDependencies(fakePool{}, cfg)
+	t.Setenv("AWS_ACCESS_KEY_ID", "test")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+
+	deps, cleanup, err := buildDependencies(context.Background(), fakePool{}, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cleanup == nil {
+		t.Fatal("expected cleanup function")
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = cleanup(ctx)
+	}()
 
 	if deps.Users == nil {
 		t.Fatal("expected user repository to be configured")
@@ -42,5 +57,8 @@ func TestBuildDependencies(t *testing.T) {
 	}
 	if deps.VideoMetadata == nil {
 		t.Fatal("expected video metadata provider to be configured")
+	}
+	if deps.VideoAssets == nil {
+		t.Fatal("expected video asset ingestor to be configured")
 	}
 }

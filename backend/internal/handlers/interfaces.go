@@ -36,3 +36,8 @@ type VideoStore interface {
 type VideoMetadataProvider interface {
 	Lookup(ctx context.Context, url string) (videos.Metadata, error)
 }
+
+// VideoAssetIngestor schedules background persistence of video files.
+type VideoAssetIngestor interface {
+	Enqueue(ctx context.Context, share models.VideoShare) error
+}

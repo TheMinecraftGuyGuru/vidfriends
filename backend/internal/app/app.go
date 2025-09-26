@@ -59,7 +59,20 @@ func serve(ctx context.Context) error {
 	}
 	defer pool.Close()
 
-	deps := buildDependencies(pool, cfg)
+	deps, cleanup, err := buildDependencies(ctx, pool, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanup == nil {
+			return
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := cleanup(shutdownCtx); err != nil {
+			logger.Error("dependency cleanup failed", "error", err)
+		}
+	}()
 
 	mux := http.NewServeMux()
 	handlers.RegisterRoutes(mux, deps)
