@@ -197,6 +197,14 @@ function isExpired(timestamp: string): boolean {
   return value <= Date.now();
 }
 
+function shouldRefreshAccessToken(tokens: SessionTokens): boolean {
+  const accessExpiry = toEpochMillis(tokens.accessExpiresAt);
+  if (accessExpiry === null) {
+    return false;
+  }
+  return accessExpiry - REFRESH_LEEWAY_MS <= Date.now();
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -530,47 +538,72 @@ async function loadFeedFromApi(userId: string, tokens: SessionTokens | null) {
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState, initializeState);
-  const refreshInFlight = useRef(false);
+  const refreshPromiseRef = useRef<Promise<SessionTokens | null> | null>(null);
 
-  const refreshSession = useCallback(async () => {
-    if (refreshInFlight.current) {
-      return;
+  const refreshSession = useCallback(async (): Promise<SessionTokens | null> => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
     }
 
     const tokens = state.auth.tokens;
     if (!tokens) {
-      return;
+      return null;
     }
 
     if (isExpired(tokens.refreshExpiresAt)) {
       clearStoredSession();
       dispatch({ type: 'sign-out' });
-      return;
+      return null;
     }
 
-    refreshInFlight.current = true;
-    try {
-      const response = await postJSON<AuthResponse>('/api/v1/auth/refresh', {
-        refreshToken: tokens.refreshToken
-      });
-      const nextTokens = ensureTokens(response);
-      dispatch({ type: 'refresh-tokens', payload: { tokens: nextTokens } });
-      if (state.auth.user) {
-        persistSession({ user: state.auth.user, tokens: nextTokens });
-      } else {
-        clearStoredSession();
+    const refreshAttempt = (async () => {
+      try {
+        const response = await postJSON<AuthResponse>('/api/v1/auth/refresh', {
+          refreshToken: tokens.refreshToken
+        });
+        const nextTokens = ensureTokens(response);
+        dispatch({ type: 'refresh-tokens', payload: { tokens: nextTokens } });
+        if (state.auth.user) {
+          persistSession({ user: state.auth.user, tokens: nextTokens });
+        } else {
+          clearStoredSession();
+        }
+        return nextTokens;
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          clearStoredSession();
+          dispatch({ type: 'sign-out' });
+        } else {
+          console.error('Failed to refresh VidFriends session', error);
+        }
+        return null;
+      } finally {
+        refreshPromiseRef.current = null;
       }
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        clearStoredSession();
-        dispatch({ type: 'sign-out' });
-      } else {
-        console.error('Failed to refresh VidFriends session', error);
-      }
-    } finally {
-      refreshInFlight.current = false;
-    }
+    })();
+
+    refreshPromiseRef.current = refreshAttempt;
+    return refreshAttempt;
   }, [dispatch, state.auth.tokens, state.auth.user]);
+
+  const ensureActiveTokens = useCallback(async (): Promise<SessionTokens | null> => {
+    const tokens = state.auth.tokens;
+    if (!tokens) {
+      return null;
+    }
+
+    if (isExpired(tokens.refreshExpiresAt)) {
+      clearStoredSession();
+      dispatch({ type: 'sign-out' });
+      return null;
+    }
+
+    if (!shouldRefreshAccessToken(tokens)) {
+      return tokens;
+    }
+
+    return refreshSession();
+  }, [dispatch, refreshSession, state.auth.tokens]);
 
   useEffect(() => {
     const tokens = state.auth.tokens;
@@ -589,10 +622,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const delay = Math.max(expiresAt - REFRESH_LEEWAY_MS - Date.now(), 0);
+    const refreshAt = expiresAt - REFRESH_LEEWAY_MS;
+    if (refreshAt <= Date.now()) {
+      refreshSession();
+      return;
+    }
+
     const timer = window.setTimeout(() => {
       refreshSession();
-    }, delay);
+    }, refreshAt - Date.now());
 
     return () => {
       window.clearTimeout(timer);
@@ -615,9 +653,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     async function loadData() {
       try {
+        const activeTokens = await ensureActiveTokens();
+        if (!activeTokens) {
+          return;
+        }
+
         const [friends, feed] = await Promise.all([
-          loadFriendsFromApi(activeUserId, tokens),
-          loadFeedFromApi(activeUserId, tokens)
+          loadFriendsFromApi(activeUserId, activeTokens),
+          loadFeedFromApi(activeUserId, activeTokens)
         ]);
 
         if (!cancelled) {
@@ -643,7 +686,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [state.auth.tokens, state.auth.user]);
+  }, [ensureActiveTokens, state.auth.user]);
 
   const signIn = useCallback<AppStateContextValue['signIn']>(
     async ({ email, password }) => {
@@ -751,7 +794,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'resolve-invite', payload: { inviteId, accepted } });
 
       try {
-        const tokens = state.auth.tokens;
+        const tokens = await ensureActiveTokens();
         if (!tokens) {
           throw new Error('Your session has expired. Please sign in again.');
         }
@@ -775,7 +818,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           : new Error('Unable to update the invitation at this time. Please try again.');
       }
     },
-    [state.auth.tokens, state.friends.connections, state.friends.pending]
+    [ensureActiveTokens, state.friends.connections, state.friends.pending]
   );
 
   const shareVideo = useCallback<AppStateContextValue['shareVideo']>(
@@ -817,7 +860,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       };
 
       const ownerId = state.auth.user?.id;
-      const tokens = state.auth.tokens;
+      const tokens = await ensureActiveTokens();
       if (!ownerId || !tokens) {
         throw new Error('You need to be signed in to share a video.');
       }
@@ -851,7 +894,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'share-video', payload: persistedEntry });
       return persistedEntry;
     },
-    [state.auth.tokens, state.auth.user?.displayName, state.auth.user?.id]
+    [ensureActiveTokens, state.auth.user?.displayName, state.auth.user?.id]
   );
 
   const reactToVideo = useCallback<AppStateContextValue['reactToVideo']>(
