@@ -267,7 +267,9 @@ export type AppStateAction =
   | { type: 'add-invite'; payload: FriendInvite }
   | { type: 'resolve-invite'; payload: { inviteId: string; accepted: boolean } }
   | { type: 'remove-friend'; payload: { friendId: string } }
-  | { type: 'share-video'; payload: FeedEntry }
+  | { type: 'share-video-start'; payload: FeedEntry }
+  | { type: 'share-video-success'; payload: { optimisticId: string; entry: FeedEntry } }
+  | { type: 'share-video-error'; payload: { optimisticId: string } }
   | { type: 'react-to-video'; payload: { entryId: string; reaction: ReactionType } }
   | {
       type: 'set-friends';
@@ -383,11 +385,32 @@ export function appReducer(state: AppState, action: AppStateAction): AppState {
           connections: state.friends.connections.filter((friend) => friend.id !== action.payload.friendId)
         }
       };
-    case 'share-video':
+    case 'share-video-start':
       return {
         ...state,
         feed: {
-          entries: [action.payload, ...state.feed.entries]
+          entries: [action.payload, ...state.feed.entries.filter((entry) => entry.id !== action.payload.id)]
+        }
+      };
+    case 'share-video-success': {
+      const replaced = state.feed.entries.some((entry) => entry.id === action.payload.optimisticId);
+      const nextEntries = replaced
+        ? state.feed.entries.map((entry) =>
+            entry.id === action.payload.optimisticId ? action.payload.entry : entry
+          )
+        : [action.payload.entry, ...state.feed.entries];
+      return {
+        ...state,
+        feed: {
+          entries: nextEntries
+        }
+      };
+    }
+    case 'share-video-error':
+      return {
+        ...state,
+        feed: {
+          entries: state.feed.entries.filter((entry) => entry.id !== action.payload.optimisticId)
         }
       };
     case 'react-to-video': {
@@ -828,6 +851,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         throw new Error('Please provide a valid video URL to share.');
       }
 
+      const ownerId = state.auth.user?.id;
+      const tokens = await ensureActiveTokens();
+      if (!ownerId || !tokens) {
+        throw new Error('You need to be signed in to share a video.');
+      }
+
       const providedTitle = entry.title.trim();
       const ownerDisplayName = state.auth.user?.displayName ?? 'Anonymous friend';
       const fallbackTitle = providedTitle.length > 0 ? providedTitle : 'Shared video';
@@ -859,15 +888,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         } satisfies FeedEntry;
       };
 
-      const ownerId = state.auth.user?.id;
-      const tokens = await ensureActiveTokens();
-      if (!ownerId || !tokens) {
-        throw new Error('You need to be signed in to share a video.');
-      }
+      const optimisticId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? `optimistic-${crypto.randomUUID()}`
+          : `optimistic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-      let response: { share: RawVideoShare };
+      const optimisticEntry = buildFeedEntry({
+        id: optimisticId,
+        url: sanitizedUrl,
+        title: providedTitle
+      });
+
+      dispatch({ type: 'share-video-start', payload: optimisticEntry });
+
       try {
-        response = await postJSON<{ share: RawVideoShare }>(
+        const response = await postJSON<{ share: RawVideoShare }>(
           '/api/v1/videos',
           {
             ownerId,
@@ -875,24 +910,34 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           },
           tokens
         );
+
+        const { share } = response;
+        const persistedEntry = buildFeedEntry({
+          id: share.ID,
+          url: share.URL,
+          title: share.Title,
+          description: share.Description,
+          thumbnail: share.Thumbnail ?? undefined,
+          createdAt: share.CreatedAt
+        });
+        dispatch({
+          type: 'share-video-success',
+          payload: { optimisticId, entry: persistedEntry }
+        });
+        return persistedEntry;
       } catch (error) {
+        dispatch({ type: 'share-video-error', payload: { optimisticId } });
+
+        if (error instanceof ApiError) {
+          throw new Error(error.message);
+        }
+
         if (error instanceof Error) {
           throw error;
         }
+
         throw new Error('Unable to share this video right now. Please try again.');
       }
-
-      const { share } = response;
-      const persistedEntry = buildFeedEntry({
-        id: share.ID,
-        url: share.URL,
-        title: share.Title,
-        description: share.Description,
-        thumbnail: share.Thumbnail ?? undefined,
-        createdAt: share.CreatedAt
-      });
-      dispatch({ type: 'share-video', payload: persistedEntry });
-      return persistedEntry;
     },
     [ensureActiveTokens, state.auth.user?.displayName, state.auth.user?.id]
   );
