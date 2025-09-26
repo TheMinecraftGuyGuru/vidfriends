@@ -59,6 +59,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=sha
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' }}
           labels: |
             org.opencontainers.image.title=VidFriends ${{ matrix.service }}
             org.opencontainers.image.source=${{ github.repositoryUrl }}

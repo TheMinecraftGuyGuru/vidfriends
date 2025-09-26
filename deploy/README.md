@@ -138,7 +138,10 @@ arm64) for the backend and frontend whenever changes land on `main`, a release
 is published, or the workflow is triggered manually. The GitHub Actions workflow
 [`container-build.yml`](../.github/workflows/container-build.yml) uses Docker
 Buildx with QEMU emulation to produce and push manifests to the GitHub Container
-Registry under `ghcr.io/<org>/<repo>-<service>`.
+Registry under `ghcr.io/<org>/<repo>-<service>`. When the workflow runs on the
+`main` branch it additionally stamps the images with a persistent `staging` tag
+so deployment pipelines can always pull the latest mainline build without
+guessing the commit SHA.
 
 If you need to test builds locally with the same configuration, install
 Docker Buildx and run:
@@ -152,6 +155,16 @@ docker buildx build \
 ```
 
 Replace the Dockerfile path and tag for the frontend image as needed.
+
+To exercise the staging deployment path you can pull the latest mainline builds
+directly:
+
+```bash
+docker pull ghcr.io/<org>/<repo>-backend:staging
+docker pull ghcr.io/<org>/<repo>-frontend:staging
+```
+
+Update `<org>`/`<repo>` to match the GitHub namespace that hosts VidFriends.
 
 ## Troubleshooting
 
