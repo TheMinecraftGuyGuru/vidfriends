@@ -5,7 +5,7 @@ MVP. Items are grouped roughly in the order they should be tackled; update the l
 
 ## Backend stabilization
 
-- [ ] Finalize database migrations (users, sessions, friend requests, video shares) and add seed data for local onboarding.
+- [x] Finalize database migrations (users, sessions, friend requests, video shares) and add seed data for local onboarding.
 - [ ] Harden the migration CLI with rollback support or transactional retries so failed runs can be recovered without dropping the database.
 - [ ] Wire structured logging and tracing context into all handlers to simplify debugging during integration testing.
 - [ ] Implement background jobs to persist video assets to object storage once `yt-dlp` metadata retrieval succeeds.

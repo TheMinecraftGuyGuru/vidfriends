@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strings"
 	"syscall"
 
 	"github.com/vidfriends/backend/internal/config"
@@ -22,7 +23,7 @@ import (
 // Run bootstraps the VidFriends backend application.
 func Run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("expected command: serve or migrate")
+		return errors.New("expected command: serve, migrate, or seed")
 	}
 
 	switch args[0] {
@@ -30,6 +31,8 @@ func Run(ctx context.Context, args []string) error {
 		return serve(ctx)
 	case "migrate":
 		return runMigrations(ctx, args[1:])
+	case "seed":
+		return runSeed(ctx, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -215,4 +218,54 @@ func runMigrations(ctx context.Context, args []string) error {
 	default:
 		return fmt.Errorf("unknown migrate command %q", command)
 	}
+}
+
+func runSeed(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New("expected seed name (e.g. dev)")
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	seedDir := cfg.SeedDir
+	if !filepath.IsAbs(seedDir) {
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("determine working directory: %w", err)
+		}
+		seedDir = filepath.Join(wd, seedDir)
+	}
+
+	seedName := args[0]
+	if !strings.HasSuffix(seedName, ".sql") {
+		seedName = fmt.Sprintf("%s_seed.sql", seedName)
+	}
+
+	seedPath := filepath.Join(seedDir, seedName)
+	contents, err := os.ReadFile(seedPath)
+	if err != nil {
+		return fmt.Errorf("read seed %s: %w", seedName, err)
+	}
+
+	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire connection: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err := conn.Exec(ctx, string(contents)); err != nil {
+		return fmt.Errorf("apply seed %s: %w", seedName, err)
+	}
+
+	fmt.Printf("applied seed %s\n", seedName)
+	return nil
 }
