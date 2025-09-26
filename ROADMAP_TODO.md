@@ -13,7 +13,7 @@ MVP. Items are grouped roughly in the order they should be tackled; update the l
 
 ## Frontend integration
 
-- [ ] Replace the AppStateProvider mock toggles with real API calls once the backend endpoints are stable.
+- [x] Replace the AppStateProvider mock toggles with real API calls once the backend endpoints are stable.
 - [ ] Implement refresh-token handling in the frontend so sessions stay alive without manual reloads.
 - [ ] Build optimistic UI flows (and rollbacks) for friend invitations and video shares.
 - [ ] Add error boundary and toast messaging for API failures surfaced by the new backend responses.

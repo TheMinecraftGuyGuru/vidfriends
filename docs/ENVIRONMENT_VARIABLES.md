@@ -27,7 +27,7 @@ setups should override secrets and endpoints accordingly.
 | -------- | ------- | ----------- |
 | `VITE_API_BASE_URL` | `http://localhost:8080` | Base URL for API requests. Update when running the backend on another host or port. |
 | `VITE_USE_MOCKS` | `false` | Enables the mock data layer provided in `configs/frontend.env.example`. Set to `true` while backend endpoints are unfinished. |
-| `VITE_USE_MOCK_DATA` | _unset_ | Some parts of the code check this legacy flag. Set it to `true` alongside `VITE_USE_MOCKS` until the variable names are unified. |
+| `VITE_USE_MOCK_DATA` | _unused_ | Legacy flag removed from the app state provider. Safe to leave unset; use `VITE_USE_MOCKS` for remaining mocks. |
 
 > **Tip:** Vite only exposes variables prefixed with `VITE_`. Restart the dev server after changing `.env.local` values.
 
