@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.8
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.2
 	github.com/cockroachdb/cockroach-go/v2 v2.4.1
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	golang.org/x/crypto v0.37.0
 	golang.org/x/time v0.13.0
